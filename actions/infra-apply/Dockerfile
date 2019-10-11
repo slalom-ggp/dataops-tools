@@ -5,4 +5,4 @@ FROM {core_image}
 
 RUN git clone {git_commit_url}.git .
 
-CMD ["python3", "-m", "slalom.dataops.infra", "run"]
+CMD ["python3", "-m", "slalom.dataops.infra", "apply"]

@@ -2,7 +2,7 @@ output "ecs_cluster_name" {
   value = "${aws_ecs_cluster.myFargateCluster.name}"
 }
 
-output "ecs_task_names" {
+output "ecs_task_name" {
   value = "${aws_ecs_task_definition.myFargateTask["Latest"].family}"
 }
 

@@ -15,4 +15,4 @@ RUN if ( ! -z "$git_commit_sha" ) then { git checkout $git_commit_sha; } fi
 
 WORKDIR ${REPO_ROOT}/slalom
 
-CMD ["python3", "-m", "slalom.dataops.infra", "run"]
+CMD ["python3", "-m", "slalom.dataops.infra", "init"]

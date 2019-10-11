@@ -7,23 +7,23 @@ output "docker_repo_image_url" {
 }
 
 output "ecs_runtask_cli" {
-  value = var.prefer_fargate ? module.aws_ecs_fargate.ecs_runtask_cli : module.aws_ecs_standard.ecs_runtask_cli
+  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_runtask_cli : module.aws_ecs_standard.ecs_runtask_cli
 }
 
 output "ecs_logging_url" {
-  value = var.prefer_fargate ? module.aws_ecs_fargate.ecs_logging_url : module.aws_ecs_standard.ecs_logging_url
+  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_logging_url : module.aws_ecs_standard.ecs_logging_url
 }
 
 output "ecs_cluster_name" {
-  value = var.prefer_fargate ? module.aws_ecs_fargate.ecs_cluster_name : module.aws_ecs_standard.ecs_cluster_name
+  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_cluster_name : module.aws_ecs_standard.ecs_cluster_name
 }
 
 output "ecs_task_names" {
-  value = var.prefer_fargate ? module.aws_ecs_fargate.*.ecs_task_name : module.aws_ecs_standard.*.ecs_task_name
+  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_task_name : module.aws_ecs_standard.ecs_task_name
 }
 
 output "ecs_container_name" {
-  value = var.prefer_fargate ? module.aws_ecs_fargate.ecs_container_name : module.aws_ecs_standard.ecs_container_name
+  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_container_name : module.aws_ecs_standard.ecs_container_name
 }
 
 output "ecs_security_group" {
@@ -31,7 +31,7 @@ output "ecs_security_group" {
 }
 
 output "aws_region" {
-  value = var.region
+  value = local.aws_region
 }
 
 output "vpc_private_subnets" {

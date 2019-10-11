@@ -1,0 +1,9 @@
+name_prefix: DataOps-
+region: us-east-2
+aws_secret_name_prefix: prod/ECSRunner
+prefer_fargate: true
+fargate_container_num_cores: 4
+fargate_container_ram_gb: 30
+ec2_instance_type: r5a.8xlarge
+ec2_container_num_cores: 10
+ec2_container_ram_gb: 60
