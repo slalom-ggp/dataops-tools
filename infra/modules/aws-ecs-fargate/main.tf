@@ -10,7 +10,7 @@ data "aws_iam_role" "ecs_task_execution_role" {
 resource "aws_ecs_service" "myFargateECSService" {
   for_each = var.tag_aliases
 
-  name            = "${var.name_prefix}ECSServiceOnFargate"
+  name            = "${var.name_prefix}ECSServiceOnFargate-${each.key}"
   desired_count   = 0
   cluster         = aws_ecs_cluster.myFargateCluster.id
   task_definition = aws_ecs_task_definition.myFargateTask[each.key].arn
@@ -42,7 +42,7 @@ resource "aws_cloudwatch_log_group" "myCWLogGroup" {
 resource "aws_ecs_task_definition" "myFargateTask" {
   for_each = var.tag_aliases
 
-  family                   = "${var.name_prefix}ECSTask-{each.key}"
+  family                   = "${var.name_prefix}ECSTask-${each.key}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.container_num_cores * 1024
@@ -54,7 +54,7 @@ resource "aws_ecs_task_definition" "myFargateTask" {
 [
   {
     "name":         "${var.container_name}",
-    "image":        "${var.container_image}:{each.value}",
+    "image":        "${var.container_image}:${each.value}",
     "cpu":          ${var.container_num_cores * 1024},
     "memory":       ${var.container_ram_gb * 1024},
     "entryPoint": [

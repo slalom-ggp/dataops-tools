@@ -3,8 +3,10 @@
 .gitignore
 .nbserver-log.txt
 .bitbucket-pipelines.yml
-**.pyc
 requirements.local-dev.txt
+**.pyc
+**/Dockerfile.core
+**/Dockerfile.quick
 
 # Folders
 .devcontainer

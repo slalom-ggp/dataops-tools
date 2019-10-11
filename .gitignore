@@ -5,6 +5,8 @@
 **TMP_*
 **derby.log
 **.bak
+**/*Dockerfile.core
+**/*Dockerfile.quick
 
 # Folders
 Notebooks

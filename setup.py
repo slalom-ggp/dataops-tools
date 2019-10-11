@@ -12,7 +12,6 @@ setup(
     download_url="https://github.com/slalom-ggp/dataops-tools/archive/v_0.1.tar.gz",
     keywords=["DATAOPS", "SLALOM", "DATA", "AUTOMATION", "CI/CD", "DEVOPS"],
     install_requires=[
-        "dataclasses",
         "fire",
         "joblib",
         "junit-xml",
@@ -21,10 +20,11 @@ setup(
         "xmlrunner",
     ],
     extras_require={
-        "aws": ["awscli", "s3fs"],
         "adl": ["azure"],
-        "spark": ["pyspark"],
+        "aws": ["awscli", "s3fs"],
         "pandas": ["pandas"],
+        "spark": ["pyspark"],
+        "docker": ["docker"],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",  # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package

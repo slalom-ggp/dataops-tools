@@ -26,8 +26,7 @@ def build(dockerfile_path, tag_as):
     """ Build an image. 'tag_as' can be a string or list of strings """
     folder_path = os.path.dirname(dockerfile_path)
     if tag_as:
-        if isinstance(tag_as, str):
-            tag_as = [tag_as]
+        tag_as = _to_list(tag_as)
         tags = " ".join([f"-t {t}" for t in tag_as])
         cmd = f"docker build {tags} {folder_path} -f {dockerfile_path}"
     else:
@@ -35,11 +34,17 @@ def build(dockerfile_path, tag_as):
     jobs.run_command(cmd)
 
 
+def _to_list(str_or_list):
+    if isinstance(str_or_list, str):
+        return str_or_list.split(",")
+    else:
+        return str_or_list
+
+
 def tag(image_name: str, tag_as):
     """ Tag an image. 'tag_as' can be a string or list of strings """
     if tag_as:
-        if isinstance(tag_as, str):
-            tag_as = [tag_as]
+        tag_as = _to_list(tag_as)
     for tag in tag_as:
         jobs.run_command(f"docker tag {image_name} {tag}")
 
@@ -53,10 +58,12 @@ def push(image_name):
 
 def smart_split(dockerfile_path: str, tag_as):
     if tag_as:
-        if isinstance(tag_as, str):
-            tag_as = [tag_as]
+        tag_as = _to_list(tag_as)
+        interim_image_name = tag_as[0].split(":")[0]
+    else:
+        interim_image_name = "untitled_image"
     (image_core, dockerfile_core), (image_derived, dockerfile_derived) = _smart_split(
-        dockerfile_path, tag_as[0].split(":")[0]
+        dockerfile_path, interim_image_name
     )
     dockerfile_path_core = os.path.realpath(f"{dockerfile_path}.core")
     dockerfile_path_derived = os.path.realpath(f"{dockerfile_path}.quick")
@@ -65,21 +72,15 @@ def smart_split(dockerfile_path: str, tag_as):
     return image_core, dockerfile_path_core, image_derived, dockerfile_path_derived
 
 
-@logged("smartly building '{dockerfile_path}'")
-def smart_build(dockerfile_path: str, tag_as, push_core=True):
+@logged("smartly building '{dockerfile_path}' as {tag_as or '(none)'}")
+def smart_build(dockerfile_path: str, tag_as=None, push_core=True, push_final=False):
     """
     Builds the dockerfile if needed but pulls it from the remote if possible.
     """
     if tag_as:
-        if isinstance(tag_as, str):
-            tag_as = [tag_as]
-
-    image_core, dockerfile_path_core, image_derived, dockerfile_path_derived = smart_split(
-        dockerfile_path, tag_as
-    )
-    # pull(image_derived, skip_if_exists=True, silent=True)
-    # if not exists_locally(image_derived):
-    #     pull(image_core, skip_if_exists=True, silent=True)
+        tag_as = _to_list(tag_as)
+    result = smart_split(dockerfile_path, tag_as)
+    image_core, dockerfile_path_core, image_derived, dockerfile_path_derived = result
     pull(image_core, skip_if_exists=True, silent=True)
     if not exists_locally(image_core):
         with logged_block(f"building interim (core) image as '{image_core}'"):
@@ -92,7 +93,12 @@ def smart_build(dockerfile_path: str, tag_as, push_core=True):
                 push(image_core)
     with logged_block(f"building '{dockerfile_path_derived}' as '{image_derived}'"):
         build(dockerfile_path_derived, image_derived)
-    tag(image_derived, tag_as)
+    if tag_as:
+        tag(image_derived, tag_as)
+        if push_final:
+            for image_name in tag_as:
+                push(image_name)
+        
 
 
 @logged("pulling image {image_name}")
@@ -132,7 +138,7 @@ def exists_remotely(image_name):
     except docker.errors.ImageNotFound as ex:
         return False
     except Exception as ex:
-        logging.exception("Failure when checking if image exists remotely '{image_name}'")
+        logging.exception(f"Failure when checking if image exists remotely '{image_name}'")
         return None
 
 
@@ -345,7 +351,7 @@ def ecs_wait_for_stop(task_arn, cluster, region, timeout=1200, raise_error=True)
 
 @logged(
     "waiting for ECS status '{wait_for}'",
-    success_detail=lambda: get_ecs_log_url(f"{region}", f"{task_arn}"),
+    success_detail=lambda: get_ecs_log_url("{region}", "{task_arn}"),
 )
 def _ecs_wait_for(
     wait_for,

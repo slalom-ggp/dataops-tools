@@ -21,9 +21,9 @@ locals {
 }
 
 locals {
-  aws_region                  = local.config["region"]
   aws_account                 = data.aws_caller_identity.current.account_id
-  name_prefix                 = local.config["name_prefix"]
+  project_shortname           = local.config["project_shortname"]
+  aws_region                  = local.config["region"]
   prefer_fargate              = local.config["prefer_fargate"]
   aws_secret_name_prefix      = local.config["aws_secret_name_prefix"]
   fargate_container_ram_gb    = local.config["fargate_container_ram_gb"]
@@ -35,6 +35,7 @@ locals {
 
 locals {
   aws_secrets_manager = "arn:aws:secretsmanager:${local.aws_region}:${local.aws_account}:secret:${local.aws_secret_name_prefix}"
+  name_prefix         = "${local.project_shortname}-"
 }
 
 provider "aws" {
@@ -44,7 +45,7 @@ provider "aws" {
 
 module "ecr_docker_registry" {
   repository_name = "${local.name_prefix}Docker-Registry"
-  image_name      = "ptb"
+  image_name      = lower(local.project_shortname)
   source          = "./modules/aws-ecr"
 }
 

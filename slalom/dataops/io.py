@@ -82,6 +82,13 @@ def _check_one_or_all(string_or_list, fn, agg_fn=all):
 
 
 # Path parsing
+def cleanup_filepath(filepath):
+    if "%USERPROFILE%" in filepath and "USERPROFILE" in os.environ:
+        filepath = filepath.replace("%USERPROFILE%", os.environ["USERPROFILE"])
+    filepath = filepath.replace("s3a://", "s3://")
+    return filepath
+
+
 def parse_s3_path(s3_path):
     """ Returns tuple (bucket_name, object_key) """
     path_parts = s3_path.replace("s3://", "").split("/")
@@ -121,6 +128,7 @@ def _pick_cloud_function(filepath, s3_fn, adl_fn, else_fn):
 
 # General file operations
 def file_exists(filepath):
+    filepath = cleanup_filepath(filepath)
     fn = _pick_cloud_function(
         filepath, s3_fn=s3_file_exists, adl_fn=None, else_fn=os.path.exists
     )
@@ -285,8 +293,9 @@ def download_s3_folder(s3_prefix, local_folder):
         download_s3_file(s3_file, target_file)
 
 
-def get_text_file_contents(filename, encoding="utf-8"):
-    with open(filename, "r", encoding=encoding) as f:
+def get_text_file_contents(filepath, encoding="utf-8"):
+    filepath = cleanup_filepath(filepath)
+    with open(filepath, "r", encoding=encoding) as f:
         return f.read()
 
 

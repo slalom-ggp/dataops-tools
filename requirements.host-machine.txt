@@ -4,6 +4,7 @@
 awscli
 azure
 boto3
+docker
 fire
 junit-xml
 psutil

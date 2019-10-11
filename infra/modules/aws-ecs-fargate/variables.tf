@@ -14,9 +14,9 @@ variable "container_image" {
 
 variable "tag_aliases" {
   default = {
-    "Latest"    = "prod"
-    "Beta"      = "beta"
-    "LatestDev" = "latest-dev"
+    "latest"    = "prod"
+    "beta"      = "beta"
+    "latestdev" = "latest-dev"
   }
 }
 

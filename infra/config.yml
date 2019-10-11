@@ -1,4 +1,4 @@
-name_prefix: DataOps-
+project_shortname: DataOps
 region: us-east-2
 aws_secret_name_prefix: prod/ECSRunner
 prefer_fargate: true
