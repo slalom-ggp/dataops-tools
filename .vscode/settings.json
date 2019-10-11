@@ -1,0 +1,23 @@
+{
+  "editor.rulers": [
+    90,
+    119
+  ],
+  "workbench.colorTheme": "Solarized Dark",
+  "workbench.iconTheme": "material-icon-theme",
+  "search.exclude": {
+    ".git": true
+  },
+  "editor.formatOnSave": true,
+  "python.formatting.provider": "black",
+  "python.formatting.blackArgs": [
+    "--line-length",
+    "90"
+  ],
+  "python.linting.enabled": true,
+  "python.linting.pylamaEnabled": true,
+  "python.linting.pylamaArgs": [
+    "--max-line-length",
+    "90"
+  ],
+}

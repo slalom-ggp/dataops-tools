@@ -1,0 +1,24 @@
+version: '3'
+services:
+  server:
+    build: .
+    image: slalom/notebook_server
+    container_name: notebook_server
+    user: root
+    ports:
+     - "8888:8888"
+     - "8998:8998"
+    volumes:
+    #  - ./.runtime:/home/jovyan/.local/share/jupyter/runtime/
+     - ./project:/home/jovyan/work/propensity_to_buy
+    entrypoint: start.sh
+    command:
+      - jupyter
+      - lab
+      - --NotebookApp.notebook_dir="/home/jovyan/work"
+      - --NotebookApp.token="qwerty123"
+    environment:
+      - LAB_OR_NOTEBOOK=lab
+      - PYTHONUNBUFFERED=1
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY

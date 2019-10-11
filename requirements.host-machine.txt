@@ -1,0 +1,11 @@
+# Use this file to track and install host machine dependencies, assuming development and
+# debugging from inside a container (not on your local dev machine).
+
+awscli
+azure
+boto3
+fire
+junit-xml
+psutil
+s3fs
+xmlrunner

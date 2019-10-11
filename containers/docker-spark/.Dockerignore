@@ -1,0 +1,17 @@
+# Files
+.Dockerignore
+.gitignore
+.nbserver-log.txt
+.bitbucket-pipelines.yml
+**.pyc
+requirements.local-dev.txt
+
+# Folders
+.devcontainer
+.runtime/
+.git
+**/.ipynb_checkpoints/
+**/.terraform/
+**/spark-warehouse/
+test-reports
+nb

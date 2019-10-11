@@ -1,0 +1,23 @@
+# Use this file to track and install dev-machine dependencies, assuming development and
+# debugging from your local dev machine (not inside a container).
+
+awscli
+azure
+careerjet_api_client
+dataclasses
+dbt
+dbt-spark
+fire
+fuzzywuzzy
+ipykernel
+joblib
+junit-xml
+matplotlib
+pandas
+psutil
+pyhive[hive]
+pyspark
+s3fs
+sklearn
+sparkmagic
+xmlrunner

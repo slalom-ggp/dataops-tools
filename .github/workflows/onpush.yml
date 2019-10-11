@@ -1,0 +1,26 @@
+name: CI tests for dataops-quickstart
+
+on:
+  push:
+    paths-ignore:
+      - docs/**.md
+      - "*.md"
+
+jobs:
+  test_setup:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v1
+      - name: Test setup script
+        run: docs\windows_setup_script.bat
+      - uses: actions/upload-artifact@master
+        if: always()
+        with:
+          name: chocolatey.log
+          path: C:\ProgramData\chocolatey\logs\chocolatey.log
+
+  print_debug_info:
+    runs-on: windows-2019
+    steps:
+      - name: Print available Windows features
+        run: Dism /online /Get-Features
