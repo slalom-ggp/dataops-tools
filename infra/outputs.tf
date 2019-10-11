@@ -6,10 +6,6 @@ output "docker_repo_image_url" {
   value = module.ecr_docker_registry.ecr_image_url
 }
 
-output "ecs_runtask_script" {
-  value = var.prefer_fargate ? module.aws_ecs_fargate.ecs_runtask_script : module.aws_ecs_standard.ecs_runtask_script
-}
-
 output "ecs_runtask_cli" {
   value = var.prefer_fargate ? module.aws_ecs_fargate.ecs_runtask_cli : module.aws_ecs_standard.ecs_runtask_cli
 }
@@ -23,7 +19,7 @@ output "ecs_cluster_name" {
 }
 
 output "ecs_task_names" {
-  value = var.prefer_fargate ? module.aws_ecs_fargate.*.ecs_task_name : module.aws_ecs_standard.ecs_task_name
+  value = var.prefer_fargate ? module.aws_ecs_fargate.*.ecs_task_name : module.aws_ecs_standard.*.ecs_task_name
 }
 
 output "ecs_container_name" {

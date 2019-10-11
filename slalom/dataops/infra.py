@@ -50,7 +50,6 @@ def main(*args, infra_dir: str = "./infra/", save_output: bool = True):
                 "aws_region",
                 "ecs_security_group",
                 "ecs_runtask_cli",
-                "ecs_runtask_script",
                 "ecs_logging_url",
             ]
             results = Parallel(n_jobs=40, verbose=2)(

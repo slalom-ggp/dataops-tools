@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket = "propensity-to-buy"
-    key    = "infra/key"
+    key    = "infra/dataops-pkg-state"
     region = "us-east-2"
   }
 }
