@@ -3,6 +3,8 @@
 # Echo this entire script to a logfile.txt
 exec > >(tee -a $HOME/logfile.txt) 2>&1
 
+DEFAULT_CMD="python3 bin/run.py"
+
 if [[ ! -z "$DETECT_HOSTNAME" ]]; then  # Set env var in order to initialize hostname
     echo "Initializing hostname (needed for ECS)..."
     echo "Detecting 'eth1' interface..."
@@ -37,8 +39,8 @@ CMD="$@"  # Set command to whatever args were sent to the bootstrap script
 if [[ ! -z "$CMD" ]]; then
     echo "Running CMD from bootstrap args: $CMD"
 else
-    CMD="python3 bin/run.py"
-    echo "No command provided in bootstrap script. Using default command: $CMD"
+    echo "No command provided in bootstrap script. Using default command: $DEFAULT_CMD"
+    CMD=$DEFAULT_CMD
 fi
 
 set +e  # Ignore errors (so we can clean up afterwards)

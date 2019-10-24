@@ -1,4 +1,4 @@
-name: CI tests for dataops-quickstart
+name: CI/CD Pipeline
 
 on:
   push:
@@ -38,6 +38,20 @@ jobs:
       - name: Test with pytest
         run: |
           pytest
+      - name: Smart build and push (slalom/dataops)
+        env:
+          GIT_COMMIT: ${{ github.sha }}
+          DOCKER_REPO: slalomggp/dataops
+          DOCKERFILE_PATH: ./Dockerfile
+          USER: ${{ secrets.DOCKER_USER }}
+          PASS: ${{ secrets.DOCKER_SECRET }}
+        run: >
+          docker login -u $USER -p $PASS &&
+          python -m slalom.dataops.dockerutils smart_build
+          --dockerfile_path=$DOCKERFILE_PATH
+          --tag_as=$DOCKER_REPO:latest-dev,$DOCKER_REPO:commit-$GIT_COMMIT
+          --push_final=1
+          --push_core=1
 
   ci_builder_update:
     runs-on: ubuntu-latest
