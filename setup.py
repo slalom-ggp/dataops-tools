@@ -1,9 +1,19 @@
 from distutils.core import setup
+from pathlib import Path
+
+if "VERSION" in os.environ:
+    detected_version = os.environ["VERSION"]
+else:
+    detected_version = Path('slalom/dataops/VERSION').read_text()
+    if len(ver.split(".")) <= 2:
+        if "BUILD_NUMBER" not in os.environ:
+            raise RuntimeError("Missing environment variable 'BUILD_NUMBER'")
+        detected_version = f"{ver}.{os.environ['BUILD_NUMBER']}"
 
 setup(
     name="slalom.dataops",
     packages=["slalom.dataops"],
-    version="0.1",
+    version=detected_version,
     license="MIT",
     description="Slalom GGP libary for DataOps automation",
     author="AJ Steers",

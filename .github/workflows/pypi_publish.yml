@@ -1,0 +1,29 @@
+name: Publish to PyPi
+
+on:
+  release:
+    types: [created, edited, published]
+
+jobs:
+  python_dataops_build:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 4
+      matrix:
+        python-version: [3.7]
+    steps:
+      - name: Clone git repo
+        uses: actions/checkout@v1
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Push to PyPi (https://pypi.org/project/slalom.dataops/)
+        env:
+          VERSION: ${{ github.ref }}
+          PYPI_USER: ${{ secrets.PYPI_USER }}
+          PYPI_PASS: ${{ secrets.PYPI_SECRET }}
+        run: |
+          python setup.py sdist
+          pip install twine
+          twine upload -u $PYPI_USER -p $PYPI_PASS dist/*
