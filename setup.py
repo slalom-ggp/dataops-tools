@@ -43,11 +43,11 @@ setup(
         "xmlrunner",
     ],
     extras_require={
-        "adl": ["azure"],
-        "aws": ["awscli", "s3fs"],
-        "pandas": ["pandas"],
-        "spark": ["pyspark"],
-        "docker": ["docker"],
+        "Azure": ["azure"],
+        "AWS": ["awscli", "s3fs"],
+        "Pandas": ["pandas"],
+        "Spark": ["pyspark"],
+        "Docker": ["docker"],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",  # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package

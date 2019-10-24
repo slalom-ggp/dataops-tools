@@ -29,3 +29,9 @@ jobs:
       - name: Test install (pip install slalom.dataops)
         run: |
           pip install slalom.dataops
+      - name: Test uninstall (pip install slalom.dataops)
+        run: |
+          pip uninstall -y slalom.dataops
+      - name: Test install (pip install w/ extras)
+        run: |
+          pip install slalom.dataops[Azure,AWS,Docker,Pandas,Spark]
