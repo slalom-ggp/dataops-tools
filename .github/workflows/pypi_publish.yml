@@ -5,7 +5,7 @@ on:
     types: [published]
 
 jobs:
-  python_dataops_build:
+  pypi_publish:
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 4
@@ -24,6 +24,9 @@ jobs:
           PYPI_USER: ${{ secrets.PYPI_USER }}
           PYPI_PASS: ${{ secrets.PYPI_SECRET }}
         run: |
-          python setup.py sdist
+          echo -e "Installing twine...\n\n"
           pip install twine
+          echo -e "\nCreating setup package...\n\n"
+          python setup.py sdist
+          echo -e "\nPublishing to version ref '$VERSION'...\n\n"
           twine upload -u $PYPI_USER -p $PYPI_PASS dist/*
