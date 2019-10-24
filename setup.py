@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 detected_version = None
-version_filepath = "slalom/dataops/VERSION"
+version_filepath = "VERSION"
 
 if "VERSION" in os.environ:
     detected_version = os.environ["VERSION"]
@@ -11,7 +11,7 @@ if "VERSION" in os.environ:
         detected_version = detected_version.split("/")[-1]
 if not detected_version and os.path.exists(version_filepath):
     detected_version = Path(version_filepath).read_text()
-    if len(ver.split(".")) <= 2:
+    if len(detected_version.split(".")) <= 2:
         if "BUILD_NUMBER" in os.environ:
             detected_version = f"{detected_version}.{os.environ['BUILD_NUMBER']}"
 if not detected_version:
