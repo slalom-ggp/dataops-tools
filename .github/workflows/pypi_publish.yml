@@ -26,3 +26,12 @@ jobs:
           python setup.py sdist
           echo -e "\nPublishing to version ref '$VERSION'...\n\n"
           twine upload -u $PYPI_USER -p $PYPI_PASS dist/*
+      - name: Test install (pip install slalom.dataops)
+        run: |
+          pip install slalom.dataops
+      - name: Test uninstall (pip uninstall slalom.dataops)
+        run: |
+          pip uninstall -y slalom.dataops
+      - name: Test full install (pip install w/ extras)
+        run: |
+          pip install slalom.dataops[Azure,AWS,Docker,Pandas,Spark]
