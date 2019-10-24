@@ -12,7 +12,7 @@ if not detected_version and os.path.exists("slalom/dataops/VERSION"):
     detected_version = Path("slalom/dataops/VERSION").read_text()
     if len(ver.split(".")) <= 2:
         if "BUILD_NUMBER" in os.environ:
-            detected_version = f"{ver}.{os.environ['BUILD_NUMBER']}"
+            detected_version = f"{detected_version}.{os.environ['BUILD_NUMBER']}"
 if not detected_version:
     raise RuntimeError("Error. Could not detect version.")
 
