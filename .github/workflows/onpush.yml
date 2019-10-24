@@ -2,6 +2,8 @@ name: CI/CD Pipeline
 
 on:
   push:
+    branches:
+      - "**"
     paths-ignore:
       - docs/**.md
       - "*.md"
