@@ -1,4 +1,4 @@
-# dataops-tools
+# dataops-tools ![CI/CD Badge (master)](https://github.com/slalom-ggp/dataops-tools/workflows/CI/CD%20Pipeline/badge.svg) ![PyPi Badge (master)](https://github.com/slalom-ggp/dataops-tools/workflows/Publish%20to%20PyPi/badge.svg)
 
 Reusable tools, utilities, and containers that accelerate data processing and DevOps.
 
