@@ -5,6 +5,7 @@
 .bitbucket-pipelines.yml
 requirements.local-dev.txt
 **.pyc
+**.terraform.plan
 **/Dockerfile.core
 **/Dockerfile.quick
 

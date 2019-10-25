@@ -1,46 +1,19 @@
-output "docker_repo_root" {
-  value = module.ecr_docker_registry.ecr_repo_root
-}
-
-output "docker_repo_image_url" {
-  value = module.ecr_docker_registry.ecr_image_url
-}
-
+output "aws_region" { value = local.aws_region }
+output "account_id" { value = "${data.aws_caller_identity.current.account_id}" }
+output "docker_repo_root" { value = module.ecr_docker_registry.ecr_repo_root }
+output "docker_repo_image_url" { value = module.ecr_docker_registry.ecr_image_url }
 output "ecs_runtask_cli" {
-  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_runtask_cli : module.aws_ecs_standard.ecs_runtask_cli
+  value = local.prefer_fargate ? module.aws_ecs.ecs_fargate_runtask_cli : module.aws_ecs.ecs_standard_runtask_cli
 }
-
-output "ecs_logging_url" {
-  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_logging_url : module.aws_ecs_standard.ecs_logging_url
-}
-
-output "ecs_cluster_name" {
-  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_cluster_name : module.aws_ecs_standard.ecs_cluster_name
-}
-
+output "ecs_logging_url" { value = module.aws_ecs.ecs_logging_url }
+output "ecs_cluster_name" { value = module.aws_ecs.ecs_cluster_name }
 output "ecs_task_names" {
-  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_task_name : module.aws_ecs_standard.ecs_task_name
+  value = local.prefer_fargate ? module.aws_ecs.ecs_fargate_task_name : module.aws_ecs.ecs_standard_task_name
 }
-
-output "ecs_container_name" {
-  value = local.prefer_fargate ? module.aws_ecs_fargate.ecs_container_name : module.aws_ecs_standard.ecs_container_name
-}
-
-output "ecs_security_group" {
-  value = module.aws_vpc.ecs_security_group
-}
-
-output "aws_region" {
-  value = local.aws_region
-}
-
-output "vpc_private_subnets" {
-  value = module.aws_vpc.private_subnet_ids
-}
-
-output "vpc_public_subnets" {
-  value = module.aws_vpc.public_subnet_ids
-}
+output "ecs_container_name" { value = module.aws_ecs.ecs_container_name }
+output "ecs_security_group" { value = module.aws_vpc.ecs_security_group }
+output "vpc_private_subnets" { value = module.aws_vpc.private_subnet_ids }
+output "vpc_public_subnets" { value = module.aws_vpc.public_subnet_ids }
 
 # output "kubeconfig" {
 #   value = "${module.aws_eks.kubeconfig}"
@@ -73,6 +46,4 @@ Other Resources:
   [not estimated]
 
 COST_ESTIMATE_TEXT
-
 }
-

@@ -1,8 +1,4 @@
-variable "name_prefix" {
-  # default = "my"
-  type = "string"
-}
-
+variable "name_prefix" {}
 variable "app_ports" {
   default = ["8080"]
 }
