@@ -11,8 +11,13 @@ data "aws_iam_policy" "SecretsManagerReadWrite" {
   arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
 }
 
+locals {
+  project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
+}
+
 resource "aws_iam_role" "ecs_task_execution_role" {
   name               = "${var.name_prefix}ECSWorkerRole"
+  tags               = { project = local.project_shortname }
   assume_role_policy = <<EOF
 {
     "Version": "2012-10-17",
@@ -49,6 +54,7 @@ resource "aws_iam_role_policy_attachment" "ecs_role_policy-secrets" {
 
 resource "aws_iam_role" "ecs_instance_role" {
   name               = "${var.name_prefix}ECSInstanceRole"
+  tags               = { project = local.project_shortname }
   assume_role_policy = <<EOF
 {
 "Version": "2012-10-17",

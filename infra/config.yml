@@ -1,9 +1,17 @@
 project_shortname: DataOps
-region: us-east-2
-aws_secret_name_prefix: prod/ECSRunner
-prefer_fargate: true
-fargate_container_num_cores: 4
-fargate_container_ram_gb: 30
-ec2_instance_type: r5a.8xlarge
-ec2_container_num_cores: 10
-ec2_container_ram_gb: 60
+region: us-west-2
+
+# ECS settings:
+ecs_fargate_container_num_cores: 4
+ecs_fargate_container_ram_gb: 30
+ecs_ec2_instances: 0
+ecs_ec2_instance_type: r5a.8xlarge
+ecs_ec2_container_num_cores: 10
+ecs_ec2_container_ram_gb: 60
+
+# Tableau Server settings:
+tableau_instance_type: m4.4xlarge
+tableau_registration_file: https://gist.githubusercontent.com/aaronsteers/11d857eeb78d52de125a9f04dac2d1bf/raw/30393f0c2284da948bede458813c2dd0593465e4/tableau-registration-aj.json
+# tableau_registration_file: modules/tableau/secrets/registration.json
+tableau_windows_servers: 1
+tableau_linux_servers: 1

@@ -8,6 +8,12 @@
 **/*Dockerfile.core
 **/*Dockerfile.quick
 
+# SSH keys
+**/secrets/**
+!**/secrets/README.md
+**.pem
+**.pub
+
 # Folders
 Notebooks
 .runtime/

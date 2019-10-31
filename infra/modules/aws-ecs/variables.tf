@@ -32,6 +32,3 @@ variable "max_ec2_instances" { default = 3 }
 variable "ec2_container_ram_gb" { default = "8" }
 variable "ec2_container_num_cores" { default = "4" }
 variable "ec2_instance_type" {}
-variable "ec2_image_id" {
-  default = "ami-0e7c12c1bedd6bf21" # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
-}

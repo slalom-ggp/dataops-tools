@@ -1,12 +1,22 @@
 data "aws_availability_zones" "myAZs" {}
 
+locals {
+  project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
+}
+
 resource "aws_eip" "myIP" {
-  tags = { Name = "${var.name_prefix}IP" }
+  tags = {
+    Name    = "${var.name_prefix}EIP"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_vpc" "myVPC" {
   cidr_block = "10.0.0.0/16"
-  tags       = { Name = "${var.name_prefix}VPC" }
+  tags = {
+    Name    = "${var.name_prefix}VPC"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_subnet" "myPublicSubnets" {
@@ -16,7 +26,10 @@ resource "aws_subnet" "myPublicSubnets" {
   cidr_block              = "10.0.${count.index + 2}.0/24"
   vpc_id                  = "${aws_vpc.myVPC.id}"
   map_public_ip_on_launch = true
-  tags                    = { Name = "${var.name_prefix}PublicSubnet-${count.index}" }
+  tags = {
+    Name    = "${var.name_prefix}PublicSubnet-${count.index}"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_subnet" "myPrivateSubnets" {
@@ -25,23 +38,35 @@ resource "aws_subnet" "myPrivateSubnets" {
   availability_zone = "${data.aws_availability_zones.myAZs.names[count.index]}"
   cidr_block        = "10.0.${count.index}.0/24"
   vpc_id            = "${aws_vpc.myVPC.id}"
-  tags              = { Name = "${var.name_prefix}PrivateSubnet-${count.index}" }
+  tags = {
+    Name    = "${var.name_prefix}PrivateSubnet-${count.index}"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_internet_gateway" "myIGW" {
   vpc_id = "${aws_vpc.myVPC.id}"
-  tags   = { Name = "${var.name_prefix}IGW" }
+  tags = {
+    Name    = "${var.name_prefix}IGW"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_nat_gateway" "myNATGateway" {
   allocation_id = "${aws_eip.myIP.id}"
   subnet_id     = "${aws_subnet.myPublicSubnets.0.id}"
-  tags          = { Name = "${var.name_prefix}NAT" }
+  tags = {
+    Name    = "${var.name_prefix}NAT"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_route_table" "myPublicRT" {
   vpc_id = "${aws_vpc.myVPC.id}"
-  tags   = { Name = "${var.name_prefix}PublicRT" }
+  tags = {
+    Name    = "${var.name_prefix}PublicRT"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_route_table_association" "myPublicRTAssoc" {
@@ -58,7 +83,10 @@ resource "aws_route" "myIGWRoute" {
 
 resource "aws_route_table" "myPrivateRT" {
   vpc_id = "${aws_vpc.myVPC.id}"
-  tags   = { Name = "${var.name_prefix}PrivateRT" }
+  tags = {
+    Name    = "${var.name_prefix}PrivateRT"
+    project = local.project_shortname
+  }
 }
 
 resource "aws_route_table_association" "myPrivateRTAssoc" {
@@ -77,7 +105,7 @@ resource "aws_security_group" "ecs_tasks_sg" {
   name        = "${var.name_prefix}SecurityGroupForECS"
   description = "allow inbound access from the ALB only"
   vpc_id      = "${aws_vpc.myVPC.id}"
-
+  tags        = { project = local.project_shortname }
   dynamic "ingress" {
     for_each = var.app_ports
     content {

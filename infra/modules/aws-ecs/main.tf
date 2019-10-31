@@ -1,7 +1,12 @@
 data "aws_availability_zones" "myAZs" {}
 
+locals {
+  project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
+}
+
 resource "aws_cloudwatch_log_group" "myCWLogGroup" {
   name = "${var.name_prefix}AWSLogs"
+  tags = { project = local.project_shortname }
   # lifecycle { prevent_destroy = true }
 }
 
@@ -10,8 +15,34 @@ module "aws_iam" {
   name_prefix = "${var.name_prefix}Fargate-"
 }
 
+data "aws_ami" "ecs_linux_ami" {
+  # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
+  owners      = ["amazon"] # AWS
+  most_recent = true
+  filter {
+    name = "name"
+    values = [
+      "*ecs*optimized*",
+      "*amazon-linux-2*"
+    ]
+  }
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+  # filter {
+  #   name   = "virtualization-type"
+  #   values = ["hvm"]
+  # }
+  # filter {
+  #   name   = "root-device-type"
+  #   values = ["ebs"]
+  # }
+}
+
 resource "aws_ecs_cluster" "myECSCluster" {
   name = "${var.name_prefix}ECSCluster"
+  tags = { project = local.project_shortname }
 }
 resource "aws_iam_instance_profile" "ecs_iam_instance_profile" {
   name = "${var.name_prefix}ecs_iam_instance_profile"
@@ -24,9 +55,8 @@ resource "aws_launch_configuration" "myEcsInstanceLaunchConfig" {
   ebs_optimized               = true
   enable_monitoring           = true
   instance_type               = var.ec2_instance_type
-  image_id                    = var.ec2_image_id
+  image_id                    = data.aws_ami.ecs_linux_ami.id
   iam_instance_profile        = aws_iam_instance_profile.ecs_iam_instance_profile.id
-  lifecycle { create_before_destroy = true }
 
   user_data = <<USER_DATA
 #!/usr/bin/env bash
@@ -38,6 +68,7 @@ resource "aws_security_group" "ecs_tasks_sg" {
   name        = "${var.name_prefix}ECSSecurityGroup"
   description = "allow inbound access from the ALB only"
   vpc_id      = var.vpc_id
+  tags        = { project = local.project_shortname }
   ingress {
     protocol    = "tcp"
     from_port   = var.app_port
@@ -101,7 +132,8 @@ resource "aws_ecs_task_definition" "myFargateTask" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.fargate_container_num_cores * 1024
   memory                   = var.fargate_container_ram_gb * 1024
-  execution_role_arn       = module.aws_iam.ecs_task_execution_role
+  execution_role_arn       = module.aws_iam.ecs_task_execution_role_arn
+  tags                     = { project = local.project_shortname }
 
   container_definitions = <<DEFINITION
 [
@@ -155,9 +187,9 @@ resource "aws_ecs_task_definition" "myECSStandardTask" {
   requires_compatibilities = ["EC2"]
   cpu                      = var.ec2_container_num_cores * 1024
   memory                   = var.ec2_container_ram_gb * 1024
-  execution_role_arn       = module.aws_iam.ecs_task_execution_role
-
-  container_definitions = <<DEFINITION
+  execution_role_arn       = module.aws_iam.ecs_task_execution_role_arn
+  tags                     = { project = local.project_shortname }
+  container_definitions    = <<DEFINITION
 [
   {
     "name":         "${var.name_prefix}Container",

@@ -3,14 +3,145 @@
     // for the documentation about the tasks.json format
     "version": "2.0.0",
     "tasks": [{
-        "label": "Build docker images",
-        "type": "shell", // "shell" or "process"
-        "command": "docker build .",
-        "group": "build", // "test" for tests
-        "presentation": {
-            "reveal": "always",
-            "panel": "shared"
+            "label": "▶ Docker: Build images",
+            "type": "shell", // "shell" or "process"
+            "command": "docker build .",
+            "group": "build", // "test" for tests
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "options": {
+                "statusbar": {
+                    "color": "#ffffff",
+                    "tooltip": "Click to build the main docker image...",
+                    "label": ">docker build!"
+                }
+            }
         },
-        "problemMatcher": []
-    }]
+        {
+            "label": "▶ Terraform: Config                                  (terraform init)",
+            "type": "process", // "shell" or "process"
+            "command": ["nano"],
+            "windows": {
+                "command": "notepad"
+            },
+            "args": ["infra/config.yml"],
+            "options": {
+                // "cwd": "infra",
+                "statusbar": {
+                    "color": "#ffffff",
+                    "tooltip": "Click to initialize asssets on your local machine",
+                    "label": ">terraform config!"
+                }
+            },
+            "group": "build", // "test" for tests
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared",
+                "revealProblems": "onProblem"
+            },
+            "problemMatcher": [],
+        },
+        {
+            "label": "▶ Terraform: (0) Pre-run                            (terraform init)",
+            "type": "shell", // "shell" or "process"
+            "options": {
+                "cwd": "infra/pre-run",
+                "statusbar": {
+                    "color": "#ffffff",
+                    "tooltip": "Click to initialize asssets on your local machine",
+                    "label": ">terraform pre-init!"
+                }
+            },
+            "command": "terraform init",
+            "group": "build", // "test" for tests
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+        },
+        {
+            "label": "▶ Terraform: (1) Initialize                           (terraform init)",
+            "type": "shell", // "shell" or "process"
+            "options": {
+                "cwd": "infra",
+                "statusbar": {
+                    "color": "#ffffff",
+                    "tooltip": "Click to initialize terraform...",
+                    "label": ">terraform init!"
+                }
+            },
+            "command": "terraform init",
+            "group": "build", // "test" for tests
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "▶ Terraform: (2) Show plan                       (terraform plan)",
+            "type": "shell", // "shell" or "process"
+            "options": {
+                "cwd": "infra",
+                "statusbar": {
+                    "hide": true,
+                    "color": "#ffffff",
+                    "tooltip": "Click to show the terraform deploy plan...",
+                    "label": ">terraform plan!"
+                }
+            },
+            "command": "terraform plan",
+            "group": "build", // "test" for tests
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "▶ Terraform: (3) Deploy Changes             (terraform apply -auto-approve)",
+            "type": "shell", // "shell" or "process"
+            "options": {
+                "cwd": "infra",
+                "statusbar": {
+                    "color": "#ffffff",
+                    "tooltip": "Click to execute the terraform deploy plan...",
+                    "label": ">terraform apply!"
+                }
+            },
+            "command": "terraform apply",
+            "group": "build", // "test" for tests
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "▶ Terraform: (4) Destroy All                      (terraform destroy)",
+            "type": "shell", // "shell" or "process"
+            "options": {
+                "cwd": "infra",
+                "env": {
+                    "TF_WARN_OUTPUT_ERRORS": "1"
+                },
+                "statusbar": {
+                    "color": "#ffffff",
+                    "tooltip": "Click to shut down ALL cloud resources...",
+                    "label": ">terraform destroy!"
+                }
+            },
+            "command": "terraform destroy",
+            "group": "build", // "test" for tests
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+    ]
 }
