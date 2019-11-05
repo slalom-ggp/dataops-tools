@@ -32,3 +32,11 @@ variable "max_ec2_instances" { default = 3 }
 variable "ec2_container_ram_gb" { default = "8" }
 variable "ec2_container_num_cores" { default = "4" }
 variable "ec2_instance_type" {}
+variable "ecs_environment_secrets" {
+  type        = "map"
+  default     = {}
+  description = <<EOF
+Mapping of environment variable names to secret manager ARNs.
+e.g. arn:aws:secretsmanager:[var.region]:[var.aws_account]:secret:prod/ECSRunner/AWS_SECRET_ACCESS_KEY
+EOF
+}

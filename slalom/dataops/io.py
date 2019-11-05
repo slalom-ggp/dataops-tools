@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 
 import boto3
+import fire
 import s3fs
 
 from slalom.dataops.logs import get_logger, logged, logged_block
@@ -365,3 +366,11 @@ def s3read_using(func, *args, **kwargs):
             logging.info(f"Deleting temporary local file: {local_path}")
             os.remove(local_path)
     return result
+
+
+def main():
+    fire.Fire()
+
+
+if __name__ == "__main__":
+    main()

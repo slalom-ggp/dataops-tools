@@ -2,6 +2,10 @@ data "aws_availability_zones" "myAZs" {}
 
 locals {
   project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
+  container_secrets_str = join(",\n", [
+    for x in var.ecs_environment_secrets :
+    "{\"name\": \"${x.key}\", \"valueFrom\": \"${x.value}\"}"
+  ])
 }
 
 resource "aws_cloudwatch_log_group" "myCWLogGroup" {
@@ -66,7 +70,7 @@ USER_DATA
 
 resource "aws_security_group" "ecs_tasks_sg" {
   name        = "${var.name_prefix}ECSSecurityGroup"
-  description = "allow inbound access from the ALB only"
+  description = "allow inbound access on specific ports"
   vpc_id      = var.vpc_id
   tags        = { project = local.project_shortname }
   ingress {
@@ -156,7 +160,8 @@ resource "aws_ecs_task_definition" "myFargateTask" {
     "portMappings": [
       {
         "containerPort": ${var.app_port},
-        "hostPort":      ${var.app_port}
+        "hostPort":      ${var.app_port},
+        "protocol":      "tcp"
       }
     ],
     "environment": [
@@ -164,17 +169,9 @@ resource "aws_ecs_task_definition" "myFargateTask" {
         "name":  "AWS_DEFAULT_REGION",
         "value": "${var.region}"
       }
-
     ],
     "secrets": [
-      {
-        "name":      "AWS_ACCESS_KEY_ID",
-        "valueFrom": "${var.aws_secrets_manager}/AWS_ACCESS_KEY_ID"
-      },
-      {
-        "name":      "AWS_SECRET_ACCESS_KEY",
-        "valueFrom": "${var.aws_secrets_manager}/AWS_SECRET_ACCESS_KEY"
-      }
+      ${local.container_secrets_str}
     ]
   }
 ]
@@ -206,19 +203,14 @@ resource "aws_ecs_task_definition" "myECSStandardTask" {
         "awslogs-stream-prefix": "container-log"
       }
     },
-    "environment": [{
-      "name":  "AWS_DEFAULT_REGION",
-      "value": "${var.region}"
-    }],
-    "secrets": [
+    "environment": [
       {
-        "name":      "AWS_ACCESS_KEY_ID",
-        "valueFrom": "${var.aws_secrets_manager}/AWS_ACCESS_KEY_ID"
-      },
-      {
-        "name":      "AWS_SECRET_ACCESS_KEY",
-        "valueFrom": "${var.aws_secrets_manager}/AWS_SECRET_ACCESS_KEY"
+        "name":  "AWS_DEFAULT_REGION",
+        "value": "${var.region}"
       }
+    ],
+    "secrets": [
+      ${local.container_secrets_str}
     ]
   }
 ]

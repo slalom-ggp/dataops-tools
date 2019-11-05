@@ -5,6 +5,8 @@ cd /opt/tableau/tableau_server/packages/scripts.*
 
 REM source /etc/profile.d/tableau_server.sh  # Update PATH
 
+echo "Install SSL for HTTPS..."
+https://interworks.com/blog/trhymer/2018/08/30/protect-tableau-server-for-free-with-lets-encrypt-windows/
 
 echo "Step 2: Activating Tableau Server (optional)..."
 REM tsm licenses activate -k <product key>  # License Key

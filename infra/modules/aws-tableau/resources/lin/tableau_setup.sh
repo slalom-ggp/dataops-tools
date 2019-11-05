@@ -15,8 +15,14 @@ set -e
 echo "Step 2: Activating Tableau Server (optional)..."
 cd /home/ubuntu/tableau
 export TSM=/opt/tableau/tableau_server/packages/customer*/tsm
+tsm licenses activate -t  # 14-day Trial
 # tsm licenses activate -k <product key>  # License Key
-# tsm licenses activate -t  # 14-day Trial
+
+echo "Installing SSL for HTTPS..."
+# Uses domain name from www.freenom.com
+# Ref: https://community.tableau.com/thread/296360
+# Ref: https://medium.com/@kcabading/getting-a-free-domain-for-your-ec2-instance-3ac2955b0a2f
+# Ref: https://certbot-dns-route53.readthedocs.io/en/stable/
 
 echo "Step 3: Registering Tableau Server..."
 # Register Tableau

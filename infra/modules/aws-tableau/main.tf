@@ -1,3 +1,25 @@
+data "aws_availability_zones" "myAZs" {}
+data "http" "icanhazip" {
+  url = "http://ipv4.icanhazip.com"
+}
+locals {
+  project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
+  my_ip             = "${chomp(data.http.icanhazip.body)}"
+  my_ip_cidr        = "${chomp(data.http.icanhazip.body)}/32"
+  # }
+  # locals {
+  admin_cidr   = flatten([local.my_ip_cidr, var.admin_cidr])
+  default_cidr = length(var.default_cidr) == 0 ? local.admin_cidr : var.default_cidr
+  win_files = flatten([
+    fileset(path.module, "resources/win/*"),
+    fileset(path.module, "resources/*")
+  ])
+  lin_files = flatten([
+    fileset(path.module, "resources/lin/*"),
+    fileset(path.module, "resources/*")
+  ])
+}
+
 data "aws_ami" "ubuntu" {
   owners      = ["099720109477"] # Canonical
   most_recent = true
@@ -29,10 +51,6 @@ data "aws_ami" "windows" {
   }
 }
 
-locals {
-  project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
-}
-
 resource "aws_security_group" "ec2_sg_allow_ssh" {
   name        = "${var.name_prefix}SecurityGroupForSSH"
   description = "allow SSH traffic (port 22)"
@@ -42,7 +60,7 @@ resource "aws_security_group" "ec2_sg_allow_ssh" {
     protocol    = "tcp"
     from_port   = "22"
     to_port     = "22"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = local.admin_cidr
   }
 }
 resource "aws_security_group" "ec2_sg_allow_outbound" {
@@ -54,7 +72,7 @@ resource "aws_security_group" "ec2_sg_allow_outbound" {
     protocol    = "tcp"
     from_port   = "0"
     to_port     = "65535"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.default_cidr
   }
 }
 resource "aws_security_group" "ec2_sg_allow_rdp" {
@@ -66,7 +84,7 @@ resource "aws_security_group" "ec2_sg_allow_rdp" {
     protocol    = "tcp"
     from_port   = "3389"
     to_port     = "3389"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = local.admin_cidr
   }
 }
 resource "aws_security_group" "ec2_sg_tableau_server" {
@@ -80,42 +98,42 @@ resource "aws_security_group" "ec2_sg_tableau_server" {
     protocol    = "tcp"
     from_port   = "80"
     to_port     = "80"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.default_cidr
   }
   ingress {
     description = "SSL"
     protocol    = "tcp"
     from_port   = "443"
     to_port     = "443"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.default_cidr
   }
   ingress {
     description = "Tableau Services Manager (TSM)"
     protocol    = "tcp"
     from_port   = "8850"
     to_port     = "8850"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = local.admin_cidr
   }
   ingress {
     description = "PostgreSQL Database"
     protocol    = "tcp"
     from_port   = "8060"
     to_port     = "8061"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.default_cidr
   }
   ingress {
     description = "Tableau License Verification Service"
     protocol    = "tcp"
     from_port   = "27000"
     to_port     = "27009"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.default_cidr
   }
   ingress {
     description = "Tableau dynamic process mapping"
     protocol    = "tcp"
     from_port   = "8000"
     to_port     = "9000"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.default_cidr
   }
 }
 
@@ -142,38 +160,45 @@ EOF
   )
 }
 
-data "template_file" "userdata_lin" {
-  template = <<EOF
+locals {
+  userdata_lin = <<EOF
 #!/bin/bash
 mkdir -p /home/ubuntu/tableau
 cd /home/ubuntu/tableau
 sudo chmod 777 /home/ubuntu/tableau
-touch /home/ubuntu/tableau/_INIT_STARTED_
+echo "" > ___BOOSTSTRAP_STARTED_
 export PROJECT=${local.project_shortname}
+${var.linux_use_https == false ? "" : "export HTTPS_DOMAIN=${var.linux_https_domain}"}
+${join("\n", [for x in local.lin_files :
+  "echo ${base64encode(file("${path.module}/${x}"))} | base64 --decode > ${basename(x)}"
+])}
 ${local.registration_install_cmd_lin} registration.json
-echo ${base64encode(file("${path.module}/tableau_setup.sh"))} | base64 --decode > tableau_setup.sh
-echo ${base64encode(file("${path.module}/userdata_lin.sh"))} | base64 --decode > userdata.sh
-${file("${path.module}/userdata_lin.sh")}
-touch /home/ubuntu/tableau/_INIT_COMPLETE_
-sudo chmod 777 /home/ubuntu/tableau/*
+echo "" > __BOOTSTRAP_COMPLETE_
+echo "" > __USERDATA_SCRIPT_STARTED_
+sudo chmod -R 777 /home/ubuntu/tableau
+./userdata_lin.sh
+echo "" > _USERDATA_SCRIPT_COMPLETE_
 EOF
-}
-data "template_file" "userdata_win" {
-  template = <<EOF
+
+userdata_win = <<EOF
 <script>
+set PROJECT=${local.project_shortname}
+${var.windows_use_https == false ? "" : "set HTTPS_DOMAIN=${var.windows_https_domain}"}
 ${local.chocolatey_install_win}
 choco install -y curl
 mkdir C:\Users\Administrator\tableau 2> NUL
 cd C:\Users\Administrator\tableau
 echo "" > ___BOOSTSTRAP_STARTED_
+${join("\n", [for x in local.win_files :
+"echo ${base64encode(file("${path.module}/${x}"))} > ${basename(x)}.b64 && certutil -decode ${basename(x)}.b64 ${basename(x)} & del ${basename(x)}.b64"
+])}
 ${local.registration_install_cmd_win} "C:\Users\Administrator\tableau\registration.json"
-echo ${base64encode(file("${path.module}/defaultapps_win.xml"))} > tmp1.b64 && certutil -decode tmp1.b64 defaultapps.xml
 dism.exe /online /import-defaultappassociations:defaultapps.xml
-echo ${base64encode(file("${path.module}/tableau_setup.bat"))} > tmp2.b64 && certutil -decode tmp2.b64 tableau_setup.bat
 echo "" > __BOOTSTRAP_COMPLETE_
-echo "" > C:\Users\Administrator\tableau\__USERDATA_SCRIPT_STARTED_
-${file("${path.module}/userdata_win.bat")}
-echo "" > C:\Users\Administrator\tableau\_USERDATA_SCRIPT_COMPLETE_
+echo "" > __USERDATA_SCRIPT_STARTED_
+${file("${path.module}/resources/win/userdata_win.bat")}
+cd C:\Users\Administrator\tableau
+echo "" > _USERDATA_SCRIPT_COMPLETE_
 </script>
 <persist>true</persist>
 EOF
@@ -191,7 +216,7 @@ resource "aws_instance" "linux_tableau_server" {
   ebs_optimized           = true
   monitoring              = true
   subnet_id               = var.subnet_ids[0]
-  user_data               = data.template_file.userdata_lin.rendered
+  user_data               = local.userdata_lin
   disable_api_termination = false
   tags = {
     name    = "${var.name_prefix}TableauServer-Linux"
@@ -221,7 +246,7 @@ resource "aws_instance" "windows_tableau_server" {
   ebs_optimized           = true
   monitoring              = true
   subnet_id               = var.subnet_ids[0]
-  user_data               = data.template_file.userdata_win.rendered
+  user_data               = local.userdata_win
   disable_api_termination = false
   tags = {
     name    = "${var.name_prefix}TableauServer-Windows"

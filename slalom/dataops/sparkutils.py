@@ -641,5 +641,9 @@ def start_server(dockerized=False):
             time.sleep(30)
 
 
-if __name__ == "__main__":
+def main():
     fire.Fire()
+
+
+if __name__ == "__main__":
+    main()

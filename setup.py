@@ -32,16 +32,17 @@ setup(
     url="https://bitbucket.org/slalom-consulting/dataops-tools/",
     download_url="https://github.com/slalom-ggp/dataops-tools/archive/v_0.1.tar.gz",
     keywords=["DATAOPS", "SLALOM", "DATA", "AUTOMATION", "CI/CD", "DEVOPS"],
-    package_data={'': [version_filepath]},
+    package_data={"": [version_filepath]},
+    entry_points={
+        "console_scripts": [  # Register CLI commands: s-spark, s-docker
+            "s-docker=slalom.dataops.dockerutils:main"
+            "s-infra=slalom.dataops.infra:main"
+            "s-spark=slalom.dataops.sparkutils:main"
+            "s-io=slalom.dataops.io:main"
+        ]
+    },
     include_package_data=True,
-    install_requires=[
-        "fire",
-        "joblib",
-        "junit-xml",
-        "matplotlib",
-        "psutil",
-        "xmlrunner",
-    ],
+    install_requires=["fire", "joblib", "junit-xml", "matplotlib", "psutil", "xmlrunner"],
     extras_require={
         "Azure": ["azure"],
         "AWS": ["awscli", "s3fs"],

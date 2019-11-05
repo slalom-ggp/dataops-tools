@@ -32,6 +32,7 @@ echo -e "                         tsm stop" >> $BANNER
 echo -e "    Register server:     tsm register --file registration.json" >> $BANNER
 echo -e "                         tsm pending-changes apply" >> $BANNER
 echo -e "                         tsm initialize" >> $BANNER
+echo -e "    Configure https:     bash ./ssl_setup.sh bi.mydomain.com" >> $BANNER
 echo "------------------------------------------------------" >> $BANNER
 
 cd /home/ubuntu
@@ -39,10 +40,17 @@ set -v # log verbose
 
 echo "Installing prereqs..."
 sudo apt-get update
-snap install aws-cli --classic
+sudo apt-get install -y \
+    jq \
+    software-properties-common
+sudo add-apt-repository -y universe
+sudo add-apt-repository -y ppa:certbot/certbot
+sudo apt-get update
 sudo apt-get -y install gdebi-core
+sudo apt-get install -y certbot
 
-echo ------------
+echo "Installing AWS CLI..."
+snap install aws-cli --classic
 echo "Updating PATH to avoid restart..."
 export PATH=$PATH:/snap/bin
 export AWS=/snap/bin/aws

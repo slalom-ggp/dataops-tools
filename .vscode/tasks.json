@@ -21,7 +21,7 @@
             }
         },
         {
-            "label": "▶ Terraform: Config                                  (terraform init)",
+            "label": "▶ Terraform: Config                                   (terraform init)",
             "type": "process", // "shell" or "process"
             "command": ["nano"],
             "windows": {
@@ -33,7 +33,7 @@
                 "statusbar": {
                     "color": "#ffffff",
                     "tooltip": "Click to initialize asssets on your local machine",
-                    "label": ">terraform config!"
+                    "label": ">tf-config!"
                 }
             },
             "group": "build", // "test" for tests
@@ -52,7 +52,7 @@
                 "statusbar": {
                     "color": "#ffffff",
                     "tooltip": "Click to initialize asssets on your local machine",
-                    "label": ">terraform pre-init!"
+                    "label": ">tf-prep!"
                 }
             },
             "command": "terraform init",
@@ -71,7 +71,7 @@
                 "statusbar": {
                     "color": "#ffffff",
                     "tooltip": "Click to initialize terraform...",
-                    "label": ">terraform init!"
+                    "label": ">tf-init!"
                 }
             },
             "command": "terraform init",
@@ -88,13 +88,13 @@
             "options": {
                 "cwd": "infra",
                 "statusbar": {
-                    "hide": true,
+                    "hide": false,
                     "color": "#ffffff",
                     "tooltip": "Click to show the terraform deploy plan...",
-                    "label": ">terraform plan!"
+                    "label": ">tf-plan!"
                 }
             },
-            "command": "terraform plan",
+            "command": "terraform apply",
             "group": "build", // "test" for tests
             "presentation": {
                 "reveal": "always",
@@ -110,10 +110,10 @@
                 "statusbar": {
                     "color": "#ffffff",
                     "tooltip": "Click to execute the terraform deploy plan...",
-                    "label": ">terraform apply!"
+                    "label": ">tf-apply!"
                 }
             },
-            "command": "terraform apply",
+            "command": "terraform apply -auto-approve",
             "group": "build", // "test" for tests
             "presentation": {
                 "reveal": "always",
@@ -132,7 +132,7 @@
                 "statusbar": {
                     "color": "#ffffff",
                     "tooltip": "Click to shut down ALL cloud resources...",
-                    "label": ">terraform destroy!"
+                    "label": ">tf-destroy!"
                 }
             },
             "command": "terraform destroy",

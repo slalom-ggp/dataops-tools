@@ -15,6 +15,3 @@ output "ec2_windows_instance_password" {
     rsadecrypt(aws_instance.windows_tableau_server[0].password_data, file(local.ssh_private_key_filepath))
   )
 }
-# output "temp" {
-#   value = data.template_file.userdata_lin.rendered
-# }

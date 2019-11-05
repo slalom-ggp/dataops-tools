@@ -1,16 +1,21 @@
 data "aws_availability_zones" "myAZs" {}
-
-locals {
-  project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
+data "http" "icanhazip" {
+  url = "http://icanhazip.com"
 }
-
-resource "aws_eip" "myIP" {
+locals { project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1) }
+locals {
+  my_ip      = "${chomp(data.http.icanhazip.body)}"
+  my_ip_cidr = "${chomp(data.http.icanhazip.body)}/32"
+}
+locals {
+  admin_cidr = flatten([local.my_ip_cidr, var.admin_cidr])
+}
+resource "aws_eip" "myEIP" {
   tags = {
     Name    = "${var.name_prefix}EIP"
     project = local.project_shortname
   }
 }
-
 resource "aws_vpc" "myVPC" {
   cidr_block = "10.0.0.0/16"
   tags = {
@@ -53,7 +58,7 @@ resource "aws_internet_gateway" "myIGW" {
 }
 
 resource "aws_nat_gateway" "myNATGateway" {
-  allocation_id = "${aws_eip.myIP.id}"
+  allocation_id = "${aws_eip.myEIP.id}"
   subnet_id     = "${aws_subnet.myPublicSubnets.0.id}"
   tags = {
     Name    = "${var.name_prefix}NAT"
@@ -77,8 +82,8 @@ resource "aws_route_table_association" "myPublicRTAssoc" {
 
 resource "aws_route" "myIGWRoute" {
   route_table_id         = "${aws_route_table.myPublicRT.id}"
-  destination_cidr_block = "0.0.0.0/0"
   gateway_id             = "${aws_internet_gateway.myIGW.id}"
+  destination_cidr_block = "0.0.0.0/0"
 }
 
 resource "aws_route_table" "myPrivateRT" {
@@ -97,13 +102,13 @@ resource "aws_route_table_association" "myPrivateRTAssoc" {
 
 resource "aws_route" "myNATRoute" {
   route_table_id         = "${aws_route_table.myPrivateRT.id}"
-  destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = "${aws_nat_gateway.myNATGateway.id}"
+  destination_cidr_block = "0.0.0.0/0"
 }
 
 resource "aws_security_group" "ecs_tasks_sg" {
   name        = "${var.name_prefix}SecurityGroupForECS"
-  description = "allow inbound access from the ALB only"
+  description = "allow inbound access on specified ports"
   vpc_id      = "${aws_vpc.myVPC.id}"
   tags        = { project = local.project_shortname }
   dynamic "ingress" {

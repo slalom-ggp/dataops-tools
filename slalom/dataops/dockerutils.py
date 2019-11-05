@@ -98,7 +98,6 @@ def smart_build(dockerfile_path: str, tag_as=None, push_core=True, push_final=Fa
         if push_final:
             for image_name in tag_as:
                 push(image_name)
-        
 
 
 @logged("pulling image {image_name}")
@@ -138,7 +137,9 @@ def exists_remotely(image_name):
     except docker.errors.ImageNotFound as ex:
         return False
     except Exception as ex:
-        logging.exception(f"Failure when checking if image exists remotely '{image_name}'")
+        logging.exception(
+            f"Failure when checking if image exists remotely '{image_name}'"
+        )
         return None
 
 
@@ -393,5 +394,9 @@ def _ecs_wait_for(
     return task_arn
 
 
-if __name__ == "__main__":
+def main():
     fire.Fire()
+
+
+if __name__ == "__main__":
+    main()
