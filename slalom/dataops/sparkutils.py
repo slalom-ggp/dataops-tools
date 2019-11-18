@@ -45,21 +45,21 @@ except Exception as ex:
     logging.warning(f"Could not load pandas library. Try 'pip install pandas'. {ex}")
 
 
-USE_THRIFT_SERVER = bool(os.environ.get("USE_THRIFT_SERVER", False))
+ENABLE_SQL_JDBC = bool(os.environ.get("ENABLE_SQL_JDBC", False))
 METASTORE_TYPE = os.environ.get("METASTORE_TYPE", "Derby")
 METASTORE_SERVER = os.environ.get("METASTORE_SERVER", None) or "localhost"
 METASTORE_DB_USER = os.environ.get("METASTORE_DB_USER", None)
 METASTORE_DB_PASSWORD = os.environ.get("METASTORE_DB_PASSWORD", None)
 SUPPORT_CLUSTER_BY = False
 
-# SPARK_IMAGE = "slalom/spark"
+DOCKER_SPARK_IMAGE = os.environ.get("DOCKER_SPARK_IMAGE", "slalomggp/dataops:latest-dev")
+SPARK_IMAGE_CMD = "sparkutils start_server"
+# SPARK_IMAGE_CMD = "python3 -m slalom.dataops.sparkutils start_server"
 # SPARK_IMAGE_CMD = "jupyter lab"
-SPARK_IMAGE = "local-dataops"
-SPARK_IMAGE_CMD = "python -m slalom.dataops.sparkutils start_server"
 CONTAINER_ENDPOINT = "spark://localhost:7077"
 SPARK_DRIVER_MEMORY = "4g"
 SPARK_EXECUTOR_MEMORY = "4g"
-SPARK_WAREHOUSE_ROOT = "/tmp/spark-sql/warehouse"
+SPARK_WAREHOUSE_ROOT = "/home/data/spark_wh"
 SPARK_S3_PREFIX = "s3a://"
 SPARK_LOG_LEVEL = "ERROR"  # ALL, DEBUG, ERROR, FATAL, INFO, WARN
 HADOOP_HOME = os.environ.get("HADOOP_HOME", "/usr/local/hdp")
@@ -78,11 +78,13 @@ SPARK_EXTRA_AWS_JARS = [
     # os.path.join(HADOOP_HOME, "share/hadoop/tools/lib/aws-java-sdk-s3-1.10.6"),
 ]
 
-
 def _add_derby_metastore_config(hadoop_conf):
     """ Returns a new hadoop_conf dict with added metastore params """
-    derby_log = "/tmp/derby.log"
-    derby_home = "/tmp/derby"
+    derby_log = "/home/data/derby.log"
+    derby_home = "/home/data/derby_home"
+    derby_hive_metastore_dir = "/home/data/hive_metastore_db"
+    for folder in [SPARK_WAREHOUSE_ROOT, derby_hive_metastore_dir]:
+        io.create_folder(derby_home)
     derby_options = (
         f"-Dderby.stream.error.file={derby_log} -Dderby.system.home={derby_home}"
     )
@@ -93,6 +95,10 @@ def _add_derby_metastore_config(hadoop_conf):
             "driver-java-options": derby_options,
             "spark.driver.extraJavaOptions": derby_options,
             "spark.executor.extraJavaOptions": derby_options,
+            "hive.metastore.warehouse.dir": f"file://{derby_hive_metastore_dir}",
+            # "javax.jdo.option.ConnectionURL": "jdbc:derby:memory:databaseName=metastore_db;create=true",
+            "javax.jdo.option.ConnectionURL": "jdbc:derby:;databaseName=/home/data/metastore_db;create=true",
+            "javax.jdo.option.ConnectionDriverName": "org.apache.derby.jdbc.EmbeddedDriver",
         }
     )
     return hadoop_conf
@@ -104,9 +110,11 @@ def _add_mysql_metastore_config(hadoop_conf):
         {
             "javax.jdo.option.ConnectionURL": (
                 f"jdbc:mysql://{METASTORE_SERVER}/"
-                "metastore_db?createDatabaseIfNotExist=true"
+                "metastore_db?createDatabaseIfNotExist=true&useSSL=false"
             ),
             "javax.jdo.option.ConnectionDriverName": "com.mysql.jdbc.Driver",
+            "javax.jdo.option.ConnectionUserName": "root",
+            "javax.jdo.option.ConnectionPassword": "root",
         }
     )
     if METASTORE_DB_USER:
@@ -151,19 +159,24 @@ def _get_aws_creds(update_env_vars=True):
 
 def _add_aws_creds_config(hadoop_conf):
     """ Returns a new hadoop_conf dict with added metastore params """
-    key, secret = _get_aws_creds()
-    hadoop_conf = {
+    hadoop_conf.update({
         "fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
-        "fs.s3a.access.key": key,
-        "fs.s3a.secret.key": secret,
         "fs.s3a.endpoint": f"s3.{os.environ.get('AWS_DEFAULT_REGION', 'us-east-2')}.amazonaws.com",
         "spark.jars": ",".join(SPARK_EXTRA_AWS_JARS),
         "com.amazonaws.services.s3.enableV4": "true",
-    }
+    })
     os.environ["HADOOP_OPTS"] = (
         os.environ.get("HADOOP_OPTS", "")
         + " -Djava.net.preferIPv4Stack=true -Dcom.amazonaws.services.s3.enableV4=true"
     )
+    try:
+        key, secret = _get_aws_creds()
+        if key:
+            hadoop_conf["fs.s3a.access.key"] = key
+        if secret:
+            hadoop_conf["fs.s3a.secret.key"] = secret
+    except Exception as ex:
+        logging.info(f"Could not load AWS creds ({ex})")
     return hadoop_conf
 
 
@@ -176,8 +189,10 @@ def _get_hadoop_conf():
         # suppress printing stage updates e.g. 'Stage 2=====>':
         "spark.ui.showConsoleProgress": "false",
         "spark.sql.hive.thriftServer.singleSession": "true",
-        "log4j.logger.org.apache.spark.sql.hive.thriftserver": "DEBUG",
-        "log4j.logger.org.apache.hive.service.server": "INFO",
+        "log4j.rootCategory": "ERROR",
+        "log4j.logger.org.apache.hive.service.server": "ERROR",
+        "log4j.logger.org.apache.spark.sql.hive.thriftserver": "ERROR",
+        "log4j.logger.org.apache.spark.api.python.PythonGatewayServer": "ERROR",
     }
     hadoop_conf = _add_aws_creds_config(hadoop_conf)
     if METASTORE_TYPE.upper() == "MYSQL":
@@ -194,7 +209,7 @@ _spark_container = None
 
 
 @logged("starting spark container '{spark_image}'")
-def _init_spark_container(spark_image=SPARK_IMAGE):
+def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE):
     global _spark_container
 
     if _spark_container:
@@ -208,7 +223,13 @@ def _init_spark_container(spark_image=SPARK_IMAGE):
         "18080": "18080",  # History Server Web UI
     }
     _get_aws_creds(update_env_vars=True)
-    env = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "BATCH_ID=SparkContainerTest"]
+    env = [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "BATCH_ID=SparkContainerTest",
+        "ENABLE_SQL_JDBC=True",
+        "METASTORE_TYPE=MySQL",
+    ]
     if "AWS_ACCESS_KEY_ID" in os.environ:
         env.append(f"AWS_ACCESS_KEY_ID={os.environ['AWS_ACCESS_KEY_ID']}")
     if "AWS_SECRET_ACCESS_KEY" in os.environ:
@@ -217,7 +238,9 @@ def _init_spark_container(spark_image=SPARK_IMAGE):
     # docker_client = docker.DockerClient(base_url="npipe:////./pipe/docker_wsl")  # WSL2
     try:
         old_container = docker_client.containers.get("spark_server")
-        old_container.stop()
+        if old_container:
+            with logged_block("terminating previous 'spark_server' docker container"):
+                old_container.stop()
     except Exception as _:
         pass
     _spark_container = docker_client.containers.run(
@@ -230,14 +253,31 @@ def _init_spark_container(spark_image=SPARK_IMAGE):
         environment=env,
         # stream=True,
     )
+    logging.info(
+        f"Attempting to initialize Spark docker container "
+        f"(status={_spark_container.status})..."
+    )
+    MAX_WAIT_TIME = int(60 * 5)
     start = time.time()
-    for line in _spark_container.logs(stream=True):
-        logging.info(line)
-        time.sleep(0.5)
-        if time.time() > start + 30:
-            logging.info("Max timeout wait exceeded (30 seconds)")
+    for line in _spark_container.logs(stream=True, until=int(start + MAX_WAIT_TIME)):
+        logging.info(f"SPARK CONTAINER LOG: {line.decode('utf-8').rstrip()}")
+        # time.sleep(0.2)
+        if "Spark server started. Monitor via" in line.decode('utf-8'):
+            logging.info(
+                f"Spark container reported success after "
+                f"{int(time.time() - start)} seconds"
+            )
             break
-    return _spark_container
+        elif time.time() > start + MAX_WAIT_TIME:
+            logging.info(f"Max timeout wait exceeded ({MAX_WAIT_TIME} seconds)")
+            break
+    if _spark_container.status in ["running", "created"]:
+        return _spark_container
+    else:
+        raise RuntimeError(
+            "Spark docker container exited unexpectedly "
+            f"(status={_spark_container.status})."
+        )
 
 
 def _destroy_spark_container():
@@ -253,45 +293,58 @@ def _init_spark(dockerized=False):
     """ Return an initialized spark object """
     global spark, sc, thrift
 
-    conf = SparkConf()
-    hadoop_conf = _get_hadoop_conf()
-    for fn in [conf.set]:
-        # for fn in [conf.set, SparkContext.setSystemProperty, context.setSystemProperty]:
-        for k, v in hadoop_conf.items():
-            fn(k, v)
     if dockerized:
         container = _init_spark_container()
         # context = SparkContext(conf=conf)
         os.environ["PYSPARK_PYTHON"] = sys.executable
         with logged_block("connecting to spark container"):
             spark = (
-                SparkSession.builder.config(conf=conf)
+                SparkSession.builder.config()
                 .master(CONTAINER_ENDPOINT)
                 .getOrCreate()
             )
+        spark.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
+        sc = spark.sparkContext
     else:
-        # context = SparkContext(conf=conf)
-        hadoop_conf = _get_hadoop_conf()
-        os.environ["PYSPARK_PYTHON"] = sys.executable
-        with logged_block("creating spark session"):
-            spark = (
-                SparkSession.builder.config(conf=conf)
-                .master("local")
-                .appName("Python Spark")
-                .enableHiveSupport()
-                .getOrCreate()
-            )
-    spark.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
-    sc = spark.sparkContext
-    _print_conf_debug(sc)
-    for jar_path in SPARK_EXTRA_AWS_JARS:
-        sc.addPyFile(jar_path)
-    if USE_THRIFT_SERVER:
+        _init_local_spark()
+
+
+def _init_local_spark():
+    # context = SparkContext(conf=conf)
+    for folder in [SPARK_WAREHOUSE_ROOT]:
+        io.create_folder(folder)
+    conf = SparkConf()
+    hadoop_conf = _get_hadoop_conf()
+    for fn in [conf.set]:
+        # for fn in [conf.set, SparkContext.setSystemProperty, context.setSystemProperty]:
+        for k, v in hadoop_conf.items():
+            fn(k, v)
+    hadoop_conf = _get_hadoop_conf()
+    os.environ["PYSPARK_PYTHON"] = sys.executable
+    with logged_block("creating spark session"):
+        spark = (
+            SparkSession.builder
+            .config(conf=conf)
+            .master("local")
+            .appName("Python Spark")
+            .enableHiveSupport()
+            .getOrCreate()
+        )
+        sc = spark.sparkContext
+    if not ENABLE_SQL_JDBC:
+        logging.info(
+            f"Skipping Thrift server launch (ENABLE_SQL_JDBC={ENABLE_SQL_JDBC})"
+        )
+    else:
         with logged_block("starting Thrift server"):
             java_import(sc._gateway.jvm, "")
             spark_hive = sc._gateway.jvm.org.apache.spark.sql.hive
             thrift_class = spark_hive.thriftserver.HiveThriftServer2
             thrift = thrift_class.startWithContext(spark._jwrapped)
+    spark.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
+    _print_conf_debug(sc)
+    for jar_path in SPARK_EXTRA_AWS_JARS:
+        sc.addPyFile(jar_path)
     else:
         thrift = None
 
@@ -631,14 +684,20 @@ def print_pandas_mem_usage(
 
 
 def start_server(dockerized=False):
-    _init_spark(dockerized=dockerized)
-    logging.info(
-        "Spark server started. "
-        "Monitor via http://localhost:4040 or http://127.0.0.1:4040"
-    )
-    with logged_block("serving spark requests"):
-        while True:
-            time.sleep(30)
+    if dockerized:
+        container = _init_spark_container()
+        with logged_block("hosting spark container"):
+            while True:
+                time.sleep(30)
+    else:
+        _init_spark(dockerized=dockerized)
+        logging.info(
+            "Spark server started. "
+            "Monitor via http://localhost:4040 or http://127.0.0.1:4040"
+        )
+        with logged_block("serving spark requests"):
+            while True:
+                time.sleep(30)
 
 
 def main():

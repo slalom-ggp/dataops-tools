@@ -271,6 +271,16 @@ def create_s3_folder(s3_folderpath):
     _ = s3.put_object(Bucket=bucket_name, Body="", Key=folder_key)
 
 
+def create_folder(folderpath):
+    fn = _pick_cloud_function(
+        folderpath,
+        s3_fn=create_s3_folder,
+        adl_fn=None,
+        else_fn=lambda folderpath: Path(folderpath).mkdir(parents=True, exist_ok=True),
+    )
+    return fn(folderpath)
+
+
 # File downloads
 def download_file(remote_path, local_path):
     fn = _pick_cloud_function(
