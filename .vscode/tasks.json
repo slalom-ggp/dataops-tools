@@ -5,7 +5,7 @@
     "tasks": [{
             "label": "▶ Docker: Build images",
             "type": "shell", // "shell" or "process"
-            "command": "docker build .",
+            "command": "docker build -t slalomggp/dataops:latest-dev .",
             "group": "build", // "test" for tests
             "presentation": {
                 "reveal": "always",

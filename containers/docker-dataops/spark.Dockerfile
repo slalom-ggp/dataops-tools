@@ -158,6 +158,12 @@ RUN unzip apache-livy-${LIVY_VERSION}-incubating-bin.zip && \
     ls -la $LIVY_HOME && ls -la $LIVY_HOME/conf && \
     mkdir -p /usr/local/livy/logs
 
+# install Delta Lake for Spark
+RUN cd $SPARK_HOME/bin && echo "print('hello, world')" > pydummy.py && \
+    ./spark-submit \
+    --packages io.delta:delta-core_2.11:0.4.0 \
+    --conf spark.yarn.submit.waitAppCompletion=false pydummy.py
+
 ENV SCRATCH_DIR /tmp/scratch
 RUN mkdir -p $SCRATCH_DIR
 

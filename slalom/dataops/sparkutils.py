@@ -61,7 +61,9 @@ SPARK_DRIVER_MEMORY = "4g"
 SPARK_EXECUTOR_MEMORY = "4g"
 SPARK_WAREHOUSE_ROOT = "/home/data/spark_wh"
 SPARK_S3_PREFIX = "s3a://"
-SPARK_LOG_LEVEL = "ERROR"  # ALL, DEBUG, ERROR, FATAL, INFO, WARN
+SPARK_LOG_LEVEL = os.environ.get(
+    "SPARK_LOG_LEVEL", "ERROR"
+)  # ALL, DEBUG, ERROR, FATAL, INFO, WARN
 HADOOP_HOME = os.environ.get("HADOOP_HOME", "/usr/local/hdp")
 # SPARK_HOME = os.environ.get("SPARK_HOME", None)
 # SPARK_CLASS_PATH = os.path.join(os.environ["SPARK_HOME"], "jars/*")
@@ -77,6 +79,7 @@ SPARK_EXTRA_AWS_JARS = [
     # os.path.join(HADOOP_HOME, "share/hadoop/tools/lib/aws-java-sdk-kms-1.10.6.jar")
     # os.path.join(HADOOP_HOME, "share/hadoop/tools/lib/aws-java-sdk-s3-1.10.6"),
 ]
+
 
 def _add_derby_metastore_config(hadoop_conf):
     """ Returns a new hadoop_conf dict with added metastore params """
@@ -140,15 +143,19 @@ def _get_aws_creds(update_env_vars=True):
         secret = os.environ["AWS_SECRET_ACCESS_KEY"]
     else:
         logging.info(
-            f"AWS_ACCESS_KEY_ID found: {'AWS_ACCESS_KEY_ID' in os.environ}, "
-            f"AWS_SECRET_ACCESS_KEY found: {'AWS_SECRET_ACCESS_KEY' in os.environ}"
+            f"Environment variables: "
+            f"[AWS_ACCESS_KEY_ID: {'AWS_ACCESS_KEY_ID' in os.environ},"
+            f" AWS_SECRET_ACCESS_KEY: {'AWS_SECRET_ACCESS_KEY' in os.environ}]"
         )
-        if io.file_exists("%USERPROFILE%/.aws/credentials"):
-            cred_file = io.get_text_file_contents("%USERPROFILE%/.aws/credentials")
-        elif io.file_exists("~/.aws/credentials"):
-            cred_file = io.get_text_file_contents("~/.aws/credentials")
+        default_creds_path = os.path.expanduser("~/.aws/credentials")
+        if io.file_exists(default_creds_path):
+            logging.info(f"Found AWS credentials file: {default_creds_path}")
+            cred_file = io.get_text_file_contents(default_creds_path)
         else:
-            raise RuntimeError("Could not find AWS creds in file or env variables.")
+            raise RuntimeError(
+                f"Could not find AWS creds in file or env variables. "
+                f"Checked: '{default_creds_path}'."
+            )
         key = _parse_key_config("AWS_ACCESS_KEY_ID", cred_file)
         secret = _parse_key_config("AWS_SECRET_ACCESS_KEY", cred_file)
         if update_env_vars:
@@ -159,12 +166,17 @@ def _get_aws_creds(update_env_vars=True):
 
 def _add_aws_creds_config(hadoop_conf):
     """ Returns a new hadoop_conf dict with added metastore params """
-    hadoop_conf.update({
-        "fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
-        "fs.s3a.endpoint": f"s3.{os.environ.get('AWS_DEFAULT_REGION', 'us-east-2')}.amazonaws.com",
-        "spark.jars": ",".join(SPARK_EXTRA_AWS_JARS),
-        "com.amazonaws.services.s3.enableV4": "true",
-    })
+    hadoop_conf.update(
+        {
+            "fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "fs.s3a.endpoint": (
+                f"s3.{os.environ.get('AWS_DEFAULT_REGION', 'us-east-2')}.amazonaws.com"
+            ),
+            "spark.jars": ",".join(SPARK_EXTRA_AWS_JARS),
+            "com.amazonaws.services.s3.enableV4": "true",
+        }
+    )
     os.environ["HADOOP_OPTS"] = (
         os.environ.get("HADOOP_OPTS", "")
         + " -Djava.net.preferIPv4Stack=true -Dcom.amazonaws.services.s3.enableV4=true"
@@ -182,18 +194,25 @@ def _add_aws_creds_config(hadoop_conf):
 
 def _get_hadoop_conf():
     hadoop_conf = {
-        "spark.executor.memory": SPARK_EXECUTOR_MEMORY,
         "spark.driver.memory": SPARK_DRIVER_MEMORY,
-        "spark.sql.warehouse.dir": SPARK_WAREHOUSE_ROOT,
+        "spark.executor.memory": SPARK_EXECUTOR_MEMORY,
+        "spark.jars.packages": "io.delta:delta-core_2.11:0.4.0",
         "spark.logConf": "true",
-        # suppress printing stage updates e.g. 'Stage 2=====>':
-        "spark.ui.showConsoleProgress": "false",
-        "spark.sql.hive.thriftServer.singleSession": "true",
-        "log4j.rootCategory": "ERROR",
-        "log4j.logger.org.apache.hive.service.server": "ERROR",
-        "log4j.logger.org.apache.spark.sql.hive.thriftserver": "ERROR",
-        "log4j.logger.org.apache.spark.api.python.PythonGatewayServer": "ERROR",
+        "spark.sql.warehouse.dir": SPARK_WAREHOUSE_ROOT,
+        "spark.ui.showConsoleProgress": "false",  # suppress updates e.g. 'Stage 2=====>'
+        "log4j.rootCategory": SPARK_LOG_LEVEL,
+        "log4j.logger.org.apache.hive.service.server": SPARK_LOG_LEVEL,
+        "log4j.logger.org.apache.spark.api.python.PythonGatewayServer": SPARK_LOG_LEVEL,
     }
+    # Add Thrift JDBC Server settings
+    hadoop_conf.update(
+        {
+            "spark.sql.hive.thriftServer.singleSession": "true",
+            "hive.server2.thrift.port": 10000,
+            "hive.server2.http.endpoint": "cliservice",
+            "log4j.logger.org.apache.spark.sql.hive.thriftserver": SPARK_LOG_LEVEL,
+        }
+    )
     hadoop_conf = _add_aws_creds_config(hadoop_conf)
     if METASTORE_TYPE.upper() == "MYSQL":
         hadoop_conf = _add_mysql_metastore_config(hadoop_conf)
@@ -262,7 +281,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE):
     for line in _spark_container.logs(stream=True, until=int(start + MAX_WAIT_TIME)):
         logging.info(f"SPARK CONTAINER LOG: {line.decode('utf-8').rstrip()}")
         # time.sleep(0.2)
-        if "Spark server started. Monitor via" in line.decode('utf-8'):
+        if "Spark server started. Monitor via" in line.decode("utf-8"):
             logging.info(
                 f"Spark container reported success after "
                 f"{int(time.time() - start)} seconds"
@@ -298,11 +317,7 @@ def _init_spark(dockerized=False):
         # context = SparkContext(conf=conf)
         os.environ["PYSPARK_PYTHON"] = sys.executable
         with logged_block("connecting to spark container"):
-            spark = (
-                SparkSession.builder.config()
-                .master(CONTAINER_ENDPOINT)
-                .getOrCreate()
-            )
+            spark = SparkSession.builder.master(CONTAINER_ENDPOINT).getOrCreate()
         spark.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
         sc = spark.sparkContext
     else:
@@ -331,10 +346,11 @@ def _init_local_spark():
             .getOrCreate()
         )
         sc = spark.sparkContext
+        # Set the property for the driver. Doesn't work using the same syntax
+        # as the executor because the jvm has already been created.
+        sc.setSystemProperty("com.amazonaws.services.s3.enableV4", "true")
     if not ENABLE_SQL_JDBC:
-        logging.info(
-            f"Skipping Thrift server launch (ENABLE_SQL_JDBC={ENABLE_SQL_JDBC})"
-        )
+        logging.info(f"Skipping Thrift server launch (ENABLE_SQL_JDBC={ENABLE_SQL_JDBC})")
     else:
         with logged_block("starting Thrift server"):
             java_import(sc._gateway.jvm, "")
@@ -631,10 +647,18 @@ def pandas_read_csv_dir(csv_dir, usecols=None, dtype=None):
 
 
 def get_pandas_from_spark_table(table_name):
+    if not pd:
+        raise RuntimeError(
+            "Could not execute get_pandas_from_spark_table(): Pandas library not loaded."
+        )
     return spark.sql(f"SELECT * FROM {table_name}").toPandas()
 
 
 def get_pandas_df(source_path, usecols=None):
+    if not pd:
+        raise RuntimeError(
+            "Could not execute get_pandas_df(): Pandas library not loaded."
+        )
     if ".xlsx" in source_path.lower():
         df = pandas_read_excel_sheet(source_path, usecols=usecols)
     else:
@@ -657,14 +681,19 @@ def pandas_read_excel_sheet(sheet_path, usecols=None):
     Expects path in form of '/path/to/file.xlsx/#sheet name'
     S3 paths are excepted.
     """
+    if not pd:
+        raise RuntimeError(
+            "Could not execute pandas_read_excel_sheet(): Pandas library not loaded."
+        )
     filepath, sheetname = sheet_path.split("/#")
     df = pd.read_excel(filepath, sheetname=sheetname, usecols=usecols)
     return df
 
 
-def print_pandas_mem_usage(
-    df: pd.DataFrame, df_name, print_fn=logging.info, min_col_size_mb=500
-):
+def print_pandas_mem_usage(df, df_name, print_fn=logging.info, min_col_size_mb=500):
+    if not pd:
+        logging.warning("Pandas support is not installed. Try 'pip install pandas'.")
+        return None
     col_mem_usage = df.memory_usage(index=True, deep=True).sort_values(ascending=False)
     ttl_mem_usage = col_mem_usage.sum()
     col_mem_usage = col_mem_usage.nlargest(n=5)
