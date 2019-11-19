@@ -30,6 +30,7 @@ echo -e "    Tail setup log:      tail -f -n 200 $LOG_FILE  (ctrl+c to exit)" >>
 echo -e "    Start/stop server:   tsm start" >> $BANNER
 echo -e "                         tsm stop" >> $BANNER
 echo -e "    Register server:     tsm register --file registration.json" >> $BANNER
+echo -e "                         tsm licenses activate -k <product-key>" >> $BANNER
 echo -e "                         tsm pending-changes apply" >> $BANNER
 echo -e "                         tsm initialize" >> $BANNER
 echo -e "    Configure https:     bash ./ssl_setup.sh bi.mydomain.com" >> $BANNER

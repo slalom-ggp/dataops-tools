@@ -3,8 +3,8 @@ data "aws_availability_zones" "myAZs" {}
 locals {
   project_shortname = substr(var.name_prefix, 0, length(var.name_prefix) - 1)
   container_secrets_str = join(",\n", [
-    for x in var.ecs_environment_secrets :
-    "{\"name\": \"${x.key}\", \"valueFrom\": \"${x.value}\"}"
+    for k, v in var.ecs_environment_secrets :
+    "{\"name\": \"${k}\", \"valueFrom\": \"${v}\"}"
   ])
 }
 
