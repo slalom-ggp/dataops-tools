@@ -8,7 +8,6 @@ runs:
     - dockerutils
     - smart_build
     - --dockerfile_path=${{ inputs.imageName }}
-    - --existing_tag=${{ inputs.existingTag }}
     - --tag_as=${{ inputs.tagAs }}
     - --push_final=${{ inputs.pushFinal }}
     - --push_core=${{ inputs.pushCore }}

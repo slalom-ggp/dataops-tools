@@ -18,6 +18,7 @@ jobs:
         python-version: [3.7]
     env:
       IMAGE_NAME: slalomggp/dataops
+      DOCKERFILE_PATH: ./Dockerfile
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
@@ -43,10 +44,10 @@ jobs:
       - name: Test with pytest
         run: |
           pytest
-      - name: Smart build and push (slalom/dataops)
+      - name: Smart build and push (${{ env.IMAGE_NAME }})
         uses: ./.github/actions/docker-smart-build
         with:
-          dockerfilePath: ./Dockerfile
+          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
@@ -55,13 +56,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: slalomggp/ci-builder
+      DOCKERFILE_PATH: containers/ci-builder/Dockerfile
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
       - name: Smart build and push (${{ env.IMAGE_NAME }})
         uses: ./.github/actions/docker-smart-build
         with:
-          dockerfilePath: containers/ci-builder/Dockerfile
+          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
@@ -70,13 +72,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: slalomggp/spark
+      DOCKERFILE_PATH: containers/docker-dataops/spark.Dockerfile
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
-      - name: Smart build and push (slalom/spark)
+      - name: Smart build and push (${{ env.IMAGE_NAME }})
         uses: ./.github/actions/docker-smart-build
         with:
-          dockerfilePath: containers/docker-dataops/spark.Dockerfile
+          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
@@ -85,13 +88,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: slalomggp/dbt
+      DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
       - name: Smart build and push (slalom/dbt)
         uses: ./.github/actions/docker-smart-build
         with:
-          dockerfilePath: containers/docker-dataops/dbt.Dockerfile
+          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
