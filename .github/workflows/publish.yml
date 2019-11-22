@@ -48,6 +48,8 @@ jobs:
   docker_dataops_publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Clone git repo
+        uses: actions/checkout@v1
       - name: Retag Dataops image
         uses: ./.github/actions/docker-retag
         with:
@@ -59,6 +61,8 @@ jobs:
   docker_ci_builder_publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Clone git repo
+        uses: actions/checkout@v1
       - name: Retag Dataops image
         uses: ./github/actions/docker-retag
         with:
@@ -70,6 +74,8 @@ jobs:
   docker_spark_publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Clone git repo
+        uses: actions/checkout@v1
       - name: Retag Dataops image
         uses: ./.github/actions/docker-retag
         with:
@@ -81,6 +87,8 @@ jobs:
   docker_dbt_publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Clone git repo
+        uses: actions/checkout@v1
       - name: Retag Dataops image
         uses: ./.github/actions/docker-retag
         with:
