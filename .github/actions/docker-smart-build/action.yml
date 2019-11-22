@@ -7,7 +7,7 @@ runs:
     # docker login -u $USER -p $PASS &&
     - dockerutils
     - smart_build
-    - --dockerfile_path=${{ inputs.imageName }}
+    - --dockerfile_path=${{ inputs.dockerfilePath }}
     - --tag_as=${{ inputs.tagAs }}
     - --push_final=${{ inputs.pushFinal }}
     - --push_core=${{ inputs.pushCore }}
