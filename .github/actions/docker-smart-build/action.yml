@@ -4,24 +4,32 @@ runs:
   using: "docker"
   image: "docker://slalomggp/dataops:latest-dev"
   args:
+    # docker login -u $USER -p $PASS &&
     - dockerutils
     - smart_build
     - --dockerfile_path=${{ inputs.imageName }}
     - --existing_tag=${{ inputs.existingTag }}
     - --tag_as=${{ inputs.tagAs }}
+    - --push_final=${{ inputs.pushFinal }}
+    - --push_core=${{ inputs.pushCore }}
   env:
     DOCKER_USER: "{{ inputs.dockerUser }}"
     DOCKER_PASSWORD: "{{ inputs.dockerPass }}"
 inputs:
-  imageName:
-    description: "The name of the image (without tags)"
-    required: true
-  existingTag:
-    description: "The name of the tag that already exists"
+  dockerfilePath:
+    description: "The path to the dockerfile to build"
     required: true
   tagAs:
-    description: "The name of the new tag (or a comma-separated list of tags)"
+    description: "The name of the new image name and tag (or a comma-separated list of the same)"
     required: true
+  pushFinal:
+    description: "Boolean (0 or 1) speficying whether or not to push the final image"
+    required: false
+    default: 1
+  pushCore:
+    description: "Boolean (0 or 1) speficying whether or not to push the core image"
+    required: false
+    default: 1
   dockerUser:
     description: "The name of the new tag (or a comma-separated list of tags)"
     required: false

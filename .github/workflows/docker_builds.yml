@@ -42,100 +42,56 @@ jobs:
         run: |
           pytest
       - name: Smart build and push (slalom/dataops)
+        uses: ./.github/actions/docker-smart-build
         env:
-          DOCKER_REPO: slalomggp/dataops
-          DOCKERFILE_PATH: ./Dockerfile
-          GIT_COMMIT: ${{ github.sha }}
-          USER: ${{ secrets.DOCKER_USER }}
-          PASS: ${{ secrets.DOCKER_SECRET }}
-        run: >
-          docker login -u $USER -p $PASS &&
-          python -m slalom.dataops.dockerutils smart_build
-          --dockerfile_path=$DOCKERFILE_PATH
-          --tag_as=$DOCKER_REPO:latest-dev,$DOCKER_REPO:commit-$GIT_COMMIT
-          --push_final=1
-          --push_core=1
+          IMAGE_NAME: slalomggp/dataops
+        with:
+          dockerfilePath: ./Dockerfile
+          tagAs: $IMAGE_NAME:latest-dev,$IMAGE_NAME:commit-${{ github.sha }}
+          dockerUser: ${{ secrets.DOCKER_USER }}
+          dockerPass: ${{ secrets.DOCKER_SECRET }}
 
   ci_builder_update:
     runs-on: ubuntu-latest
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
-      - name: Set up Python (3.7)
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: Install dependencies (python pip)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.host-machine.txt
       - name: Smart build and push (slalom/ci-builder)
+        uses: ./.github/actions/docker-smart-build
         env:
-          DOCKER_REPO: slalomggp/ci-builder
-          DOCKERFILE_PATH: containers/ci-builder/Dockerfile
-          GIT_COMMIT: ${{ github.sha }}
-          USER: ${{ secrets.DOCKER_USER }}
-          PASS: ${{ secrets.DOCKER_SECRET }}
-        run: >
-          docker login -u $USER -p $PASS &&
-          python -m slalom.dataops.dockerutils smart_build
-          --dockerfile_path=$DOCKERFILE_PATH
-          --tag_as=$DOCKER_REPO:latest-dev,$DOCKER_REPO:commit-$GIT_COMMIT
-          --push_final=1
-          --push_core=1
+          IMAGE_NAME: slalomggp/ci-builder
+        with:
+          dockerfilePath: containers/ci-builder/Dockerfile
+          tagAs: $IMAGE_NAME:latest-dev,$IMAGE_NAME:commit-${{ github.sha }}
+          dockerUser: ${{ secrets.DOCKER_USER }}
+          dockerPass: ${{ secrets.DOCKER_SECRET }}
 
   docker_spark:
     runs-on: ubuntu-latest
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
-      - name: Set up Python (3.7)
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: Install dependencies (python pip)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.host-machine.txt
       - name: Smart build and push (slalom/spark)
+        uses: ./.github/actions/docker-smart-build
         env:
-          DOCKER_REPO: slalomggp/spark
-          DOCKERFILE_PATH: containers/docker-dataops/spark.Dockerfile
-          GIT_COMMIT: ${{ github.sha }}
-          USER: ${{ secrets.DOCKER_USER }}
-          PASS: ${{ secrets.DOCKER_SECRET }}
-        run: >
-          docker login -u $USER -p $PASS &&
-          python -m slalom.dataops.dockerutils smart_build
-          --dockerfile_path=$DOCKERFILE_PATH
-          --tag_as=$DOCKER_REPO:latest-dev,$DOCKER_REPO:commit-$GIT_COMMIT
-          --push_final=1
-          --push_core=1
+          IMAGE_NAME: slalomggp/spark
+        with:
+          dockerfilePath: containers/docker-dataops/spark.Dockerfile
+          tagAs: $IMAGE_NAME:latest-dev,$IMAGE_NAME:commit-${{ github.sha }}
+          dockerUser: ${{ secrets.DOCKER_USER }}
+          dockerPass: ${{ secrets.DOCKER_SECRET }}
 
   docker_dbt:
     runs-on: ubuntu-latest
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
-      - name: Set up Python (3.7)
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: Install dependencies (python pip)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.host-machine.txt
       - name: Smart build and push (slalom/dbt)
+        uses: ./.github/actions/docker-smart-build
         env:
-          DOCKER_REPO: slalomggp/dbt
-          DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
-          GIT_COMMIT: ${{ github.sha }}
-          USER: ${{ secrets.DOCKER_USER }}
-          PASS: ${{ secrets.DOCKER_SECRET }}
-        run: >
-          docker login -u $USER -p $PASS &&
-          python -m slalom.dataops.dockerutils smart_build
-          --dockerfile_path=$DOCKERFILE_PATH
-          --tag_as=$DOCKER_REPO:latest-dev,$DOCKER_REPO:commit-$GIT_COMMIT
-          --push_final=1
-          --push_core=1
+          IMAGE_NAME: slalomggp/dbt
+        with:
+          dockerfilePath: containers/docker-dataops/dbt.Dockerfile
+          tagAs: $IMAGE_NAME:latest-dev,$IMAGE_NAME:commit-${{ github.sha }}
+          dockerUser: ${{ secrets.DOCKER_USER }}
+          dockerPass: ${{ secrets.DOCKER_SECRET }}
