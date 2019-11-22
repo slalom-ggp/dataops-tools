@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Retag Dataops image
-        uses: actions/docker-retag
+        uses: ./.github/actions/docker-retag
         with:
           imageName: slalomggp/dataops
           existing_tag: commit-${{ github.sha }}
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Retag Dataops image
-        uses: actions/docker-retag
+        uses: ./github/actions/docker-retag
         with:
           imageName: slalomggp/ci-builder
           existing_tag: commit-${{ github.sha }}
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Retag Dataops image
-        uses: actions/docker-retag
+        uses: ./.github/actions/docker-retag
         with:
           imageName: slalomggp/spark
           existing_tag: commit-${{ github.sha }}
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Retag Dataops image
-        uses: actions/docker-retag
+        uses: ./.github/actions/docker-retag
         with:
           imageName: slalomggp/dbt
           existing_tag: commit-${{ github.sha }}
