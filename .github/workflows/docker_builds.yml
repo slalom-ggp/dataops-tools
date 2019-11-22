@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD and Docker Builds
 
 on:
   push:
@@ -42,9 +42,9 @@ jobs:
           pytest
       - name: Smart build and push (slalom/dataops)
         env:
-          GIT_COMMIT: ${{ github.sha }}
           DOCKER_REPO: slalomggp/dataops
           DOCKERFILE_PATH: ./Dockerfile
+          GIT_COMMIT: ${{ github.sha }}
           USER: ${{ secrets.DOCKER_USER }}
           PASS: ${{ secrets.DOCKER_SECRET }}
         run: >
@@ -70,9 +70,9 @@ jobs:
           pip install -r requirements.host-machine.txt
       - name: Smart build and push (slalom/ci-builder)
         env:
-          GIT_COMMIT: ${{ github.sha }}
           DOCKER_REPO: slalomggp/ci-builder
           DOCKERFILE_PATH: containers/ci-builder/Dockerfile
+          GIT_COMMIT: ${{ github.sha }}
           USER: ${{ secrets.DOCKER_USER }}
           PASS: ${{ secrets.DOCKER_SECRET }}
         run: >
@@ -98,9 +98,9 @@ jobs:
           pip install -r requirements.host-machine.txt
       - name: Smart build and push (slalom/spark-ds)
         env:
-          GIT_COMMIT: ${{ github.sha }}
           DOCKER_REPO: slalomggp/spark-ds
           DOCKERFILE_PATH: containers/docker-dataops/spark.Dockerfile
+          GIT_COMMIT: ${{ github.sha }}
           USER: ${{ secrets.DOCKER_USER }}
           PASS: ${{ secrets.DOCKER_SECRET }}
         run: >
@@ -126,9 +126,9 @@ jobs:
           pip install -r requirements.host-machine.txt
       - name: Smart build and push (slalom/dbt)
         env:
-          GIT_COMMIT: ${{ github.sha }}
           DOCKER_REPO: slalomggp/dbt
           DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
+          GIT_COMMIT: ${{ github.sha }}
           USER: ${{ secrets.DOCKER_USER }}
           PASS: ${{ secrets.DOCKER_SECRET }}
         run: >

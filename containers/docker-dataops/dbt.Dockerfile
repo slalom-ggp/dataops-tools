@@ -1,28 +1,97 @@
-ARG source_image=python:3.7
+# ARG source_image=python:3.7
+ARG source_image=slalomggp/dataops:latest-dev
 
 FROM ${source_image}
 
-# Update and install system packages
-RUN apt-get update -y && \
-    apt-get install -y -q \
-    git \
+ARG dbt_version_filter=''
+ARG meltano_version_filter='>=1.6.0'
+# ARG meltano_version_filter=''
+
+RUN mkdir -p /projects && \
+    mkdir -p /.c && \
+    mkdir -p /venv
+WORKDIR /projects
+
+RUN apt-get update && apt-get install -y -q \
     build-essential \
+    git \
+    g++ \
+    libsasl2-2 \
+    libsasl2-dev \
+    libsasl2-modules-gssapi-mit \
     libpq-dev \
-    python-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    python-dev \
+    python3-dev \
+    python3-pip \
+    python3-venv
 
-# Install DBT
-RUN pip install dbt==0.14.3
+ENV MELTANOENV /venv/meltano
+ENV MELTANO /venv/meltano/bin/meltano
+RUN python -m venv $MELTANOENV && \
+    $MELTANOENV/bin/pip3 install "meltano$meltano_version_filter" && \
+    $MELTANO --version
+RUN $MELTANO --version && \
+    $MELTANO init sample-meltano-project && \
+    cd sample-meltano-project && \
+    $MELTANO upgrade && \
+    $MELTANO discover all && \
+    $MELTANO --version
 
-# Set environment variables
-ENV DBT_DIR /dbt
+# Configure DBT
+ENV DBTENV /venv/dbt
+ENV DBT /venv/dbt/bin/dbt
+RUN python3 -m venv $DBTENV && \
+    $DBTENV/bin/pip3 install "dbt$dbt_version_filter" && \
+    $DBT --version
+RUN $DBT init sample-dbt-project && \
+    cd sample-dbt-project && \
+    $DBT --version
 
-# Set working directory
-WORKDIR $DBT_DIR
+# Configure dbt-spark
+ENV DBTSPARKENV /venv/dbt-spark
+ENV DBTSPARK /venv/dbt-spark/bin/dbt
+RUN python3 -m venv $DBTSPARKENV && \
+    $DBTSPARKENV/bin/pip3 install pyhive[hive] dbt-spark && \
+    $DBTSPARK --version
+RUN $DBTSPARK init sample-dbtspark-project && \
+    cd sample-dbtspark-project && \
+    $DBTSPARK --version
 
-COPY bootstrap.sh $DBT_DIR/bootstrap.sh
-#COPY project $DBT_DIR/project
-# Run dbt
-ENTRYPOINT [ "bash","./bootstrap.sh" ]
-CMD ["dbt"]
+# Configure pipelinewise
+ENV PIPELINEWISE_HOME /venv/pipelinewise
+ENV PIPELINEWISEENV /venv/pipelinewise/.virtualenvs/pipelinewise
+ENV PIPELINEWISE $PIPELINEWISEENV/bin/pipelinewise
+RUN cd /venv && \
+    git clone https://github.com/transferwise/pipelinewise.git && \
+    cd pipelinewise && ./install.sh --acceptlicenses
+RUN $PIPELINEWISE init --dir sample_pipelinewise_project --name sample_pipelinewise_project && \
+    $PIPELINEWISE import --dir sample_pipelinewise_project
+
+# Capture command history, allows recall if used with `-v ./.devcontainer/.bashhist:/root/.bash_history`
+RUN mkdir -p /root/.bash_history && \
+    echo "export PROMPT_COMMAND='history -a'" >> "/root/.bashrc" && \
+    echo "export HISTFILE=/root/.bash_history/.bash_history" >> "/root/.bashrc"
+
+RUN echo '#!/bin/bash \n\
+    echo "Starting boostrap.sh script..." \n\
+    source /venv/meltano/bin/activate \n\
+    meltano --version || true \n\
+    if [[ ! -d ".meltano" ]]; then \n\
+    LOG_FILE=.meltano-install-log.txt \n\
+    echo "Folder ''.meltano'' is missing. Beginning Meltano install as background process on `date`..." | tee -a $LOG_FILE \n\
+    echo "Logging install progress to: $LOG_FILE" \n\
+    echo "View progress with ''jobs -l'' or ''tail -f $LOG_FILE''" \n\
+    nohup sh -c ''meltano upgrade && echo -e "Install complete on `date`\n\n"'' | tee -a $LOG_FILE & \n\
+    fi \n\
+    meltano --version || true \n\
+    date \n\
+    echo "Running meltano with provided command args: $@..." \n\
+    $@ \n\
+    ' > /projects/bootstrap.sh && \
+    chmod 777 /projects/bootstrap.sh
+
+# COPY bootstrap.sh $DBT_DIR/bootstrap.sh
+
+ENTRYPOINT ["/projects/bootstrap.sh"]
+CMD ["meltano", "ui"]
+# CMD ["bash"]

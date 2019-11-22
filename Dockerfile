@@ -1,4 +1,4 @@
-ARG source_image=slalomggp/spark-ds
+ARG source_image=slalomggp/spark-ds:latest-dev
 ARG source_tag=latest-dev
 
 FROM ${source_image}:${source_tag}

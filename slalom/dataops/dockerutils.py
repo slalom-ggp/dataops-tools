@@ -224,6 +224,17 @@ def ecs_retag(image_name, existing_tag, new_tag):
         raise RuntimeError(f"Could not retag the specified image.\n{output_text}")
 
 
+@logged("applying tag '{tag_as}' to remote image '{image_name}:{existing_tag}'")
+def remote_retag(image_name, existing_tag, tag_as):
+    if "amazonaws.com/" in image_name:
+        return ecs_retag(image_name, existing_tag, tag_as)
+    existing_fullname = f"{image_name}:{existing_tag}"
+    new_fullname = f"{image_name}:{tag_as}"
+    pull(existing_fullname)
+    tag(existing_fullname, new_fullname)
+    push(new_fullname)
+
+
 def ecs_submit(
     task_name: str,
     cluster: str,
