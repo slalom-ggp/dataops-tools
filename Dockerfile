@@ -1,7 +1,6 @@
-ARG source_image=slalomggp/spark
-ARG source_tag=latest-dev
+ARG source_image=slalomggp/spark:latest-dev
 
-FROM ${source_image}:${source_tag}
+FROM ${source_image}
 
 ENV ENABLE_SQL_JDBC true
 ENV METASTORE_TYPE MySQL
