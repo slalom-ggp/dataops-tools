@@ -2,7 +2,7 @@ name: Docker Retag
 description: Smartly retags an existing docker image
 runs:
   using: "docker"
-  image: "docker://slalomggp:dataops:latest-dev"
+  image: "docker://slalomggp/dataops:latest-dev"
   args:
     - dockerutils
     - remote_retag

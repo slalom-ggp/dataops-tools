@@ -2,7 +2,7 @@ name: Docker Smart Build
 description: Smartly builds a docker image
 runs:
   using: "docker"
-  image: "docker://slalomggp:dataops:latest-dev"
+  image: "docker://slalomggp/dataops:latest-dev"
   args:
     - dockerutils
     - smart_build
