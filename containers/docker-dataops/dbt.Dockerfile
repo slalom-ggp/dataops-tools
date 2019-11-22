@@ -1,11 +1,11 @@
-# ARG source_image=python:3.7
-ARG source_image=slalomggp/dataops:latest-dev
+ARG source_image=python:3.7
 
-FROM ${source_image}
+FROM {source_image}
 
+# Set version filters, e.g. '>=0.1.0', '>=1.0,<=2.0'
+# Optionally, use the text 'skip' to skip or '' to use latest version
 ARG dbt_version_filter=''
-ARG meltano_version_filter='>=1.6.0'
-# ARG meltano_version_filter=''
+ARG meltano_version_filter='skip'
 
 RUN mkdir -p /projects && \
     mkdir -p /.c && \
@@ -27,10 +27,12 @@ RUN apt-get update && apt-get install -y -q \
 
 ENV MELTANOENV /venv/meltano
 ENV MELTANO /venv/meltano/bin/meltano
-RUN python -m venv $MELTANOENV && \
+RUN if [ "$meltano_version_filter" = "skip" ]; then exit 0; fi && \
+    python -m venv $MELTANOENV && \
     $MELTANOENV/bin/pip3 install "meltano$meltano_version_filter" && \
     $MELTANO --version
-RUN $MELTANO --version && \
+RUN if [ "$meltano_version_filter" = "skip" ]; then exit 0; fi && \
+    $MELTANO --version && \
     $MELTANO init sample-meltano-project && \
     cd sample-meltano-project && \
     $MELTANO upgrade && \
@@ -91,7 +93,8 @@ RUN echo '#!/bin/bash \n\
     chmod 777 /projects/bootstrap.sh
 
 # COPY bootstrap.sh $DBT_DIR/bootstrap.sh
+# ENTRYPOINT ["$VENV/bin/meltano"]
 
 ENTRYPOINT ["/projects/bootstrap.sh"]
-CMD ["meltano", "ui"]
-# CMD ["bash"]
+# CMD ["meltano", "ui"]
+CMD ["bash"]
