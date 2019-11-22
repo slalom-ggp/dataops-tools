@@ -54,7 +54,7 @@ jobs:
         uses: ./.github/actions/docker-retag
         with:
           imageName: slalomggp/dataops
-          existing_tag: commit-${{ github.sha }}
+          existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
@@ -67,7 +67,7 @@ jobs:
         uses: ./github/actions/docker-retag
         with:
           imageName: slalomggp/ci-builder
-          existing_tag: commit-${{ github.sha }}
+          existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
@@ -80,7 +80,7 @@ jobs:
         uses: ./.github/actions/docker-retag
         with:
           imageName: slalomggp/spark
-          existing_tag: commit-${{ github.sha }}
+          existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
@@ -93,7 +93,7 @@ jobs:
         uses: ./.github/actions/docker-retag
         with:
           imageName: slalomggp/dbt
-          existing_tag: commit-${{ github.sha }}
+          existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPass: ${{ secrets.DOCKER_SECRET }}
