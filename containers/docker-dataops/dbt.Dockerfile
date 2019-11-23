@@ -1,6 +1,6 @@
 ARG source_image=python:3.7
 
-FROM {source_image}
+FROM ${source_image}
 
 # Set version filters, e.g. '>=0.1.0', '>=1.0,<=2.0'
 # Optionally, use the text 'skip' to skip or '' to use latest version

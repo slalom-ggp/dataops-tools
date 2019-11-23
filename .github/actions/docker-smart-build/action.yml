@@ -11,9 +11,11 @@ runs:
     - --tag_as=${{ inputs.tagAs }}
     - --push_final=${{ inputs.pushFinal }}
     - --push_core=${{ inputs.pushCore }}
+    - --with_login=True
   env:
-    DOCKER_USER: "{{ inputs.dockerUser }}"
-    DOCKER_PASSWORD: "{{ inputs.dockerPass }}"
+    DOCKER_USERNAME: "{{ inputs.dockerUser }}"
+    DOCKER_PASSWORD: "{{ inputs.dockerPassword }}"
+    DOCKER_REGISTRY: "{{ inputs.dockerRegistry }}"
 inputs:
   dockerfilePath:
     description: "The path to the dockerfile to build"
@@ -37,6 +39,10 @@ inputs:
     description: "Docker password for login"
     required: false
     default: ""
+  dockerRegistry:
+    description: "Docker registry for login (optional)"
+    required: false
+    default: "index.docker.io"
 branding:
   icon: chevrons-right
   color: blue

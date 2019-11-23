@@ -191,7 +191,33 @@ def ecs_login(region):
         )
         _, _ = jobs.run_command(ecs_login_cmd, hide=True)
     except Exception as ex:
-        raise RuntimeError("ECS login failed. {ex}")
+        raise RuntimeError(f"ECS login failed. {ex}")
+
+
+def login(raise_error=False):
+    usr = environ.get("DOCKER_USERNAME", "")
+    pwd = environ.get("DOCKER_PASSWORD", "")
+    registry = environ.get("DOCKER_REGISTRY", "") or "index.docker.io"
+    if not usr and pwd:
+        error_msg = (
+            "Could not login to docker registry."
+            "Missing env variable DOCKER_USERNAME or DOCKER_PASSWORD"
+        )
+        if raise_error:
+            raise RuntimeError(error_msg)
+        else
+            logging.warning(error_msg)
+            return False
+    logging.info(f"Logging into docker registry '{registry}' as user '{usr}'...")
+    try:
+        jobs.run_command(
+            f"docker login {registry} --username {usr} --password {pwd}", hide=True
+        )
+    except Exception as ex:
+        if raise_error:
+            raise RuntimeError(f"Docker login failed. {ex}")
+        else:
+            logging.warning(f"Docker login failed. {ex}")
 
 
 @logged("applying tag '{new_tag}' to remote ECS image '{image_name}:{existing_tag}'")
@@ -225,7 +251,9 @@ def ecs_retag(image_name, existing_tag, new_tag):
 
 
 @logged("applying tag '{tag_as}' to remote image '{image_name}:{existing_tag}'")
-def remote_retag(image_name, existing_tag, tag_as):
+def remote_retag(image_name, existing_tag, tag_as, with_login=False):
+    if bool(with_login):
+        login()
     if "amazonaws.com/" in image_name:
         return ecs_retag(image_name, existing_tag, tag_as)
     existing_fullname = f"{image_name}:{existing_tag}"

@@ -9,9 +9,11 @@ runs:
     - --image_name=${{ inputs.imageName }}
     - --existing_tag=${{ inputs.existingTag }}
     - --tag_as=${{ inputs.tagAs }}
+    - --with_login=True
   env:
-    DOCKER_USER: "{{ inputs.dockerUser }}"
-    DOCKER_PASSWORD: "{{ inputs.dockerPass }}"
+    DOCKER_USERNAME: "{{ inputs.dockerUser }}"
+    DOCKER_PASSWORD: "{{ inputs.dockerPassword }}"
+    DOCKER_REGISTRY: "{{ inputs.dockerRegistry }}"
 inputs:
   imageName:
     description: "The name of the image (without tags)"
@@ -26,10 +28,14 @@ inputs:
     description: "Docker user for login"
     required: false
     default: ""
-  dockerPass:
+  dockerPassword:
     description: "Docker password for login"
     required: false
     default: ""
+  dockerRegistry:
+    description: "Docker registry for login (optional)"
+    required: false
+    default: "index.docker.io"
 branding:
   icon: anchor
   color: blue
