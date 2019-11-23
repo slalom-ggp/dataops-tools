@@ -73,7 +73,9 @@ def smart_split(dockerfile_path: str, tag_as):
 
 
 @logged("smartly building '{dockerfile_path}' as {tag_as or '(none)'}")
-def smart_build(dockerfile_path: str, tag_as=None, push_core=True, push_final=False):
+def smart_build(
+    dockerfile_path: str, tag_as=None, push_core=True, push_final=False, with_login=False
+):
     """
     Builds the dockerfile if needed but pulls it from the remote if possible.
     """

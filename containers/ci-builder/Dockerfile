@@ -1,5 +1,4 @@
 # An image to expedite CI/CD builds, especially related to:
-#  - AWS/Azure file access
 #  - Python linting and unit tests
 #  - Docker builds
 
@@ -9,18 +8,20 @@ ENV ARTIFACTS_ROOT /tmp/output
 ENV TESTS_OUTPUT $ARTIFACTS_ROOT/test-reports
 
 RUN apt-get update && \
-    apt-get install -y jq
+    apt-get install -y \
+    docker.io \
+    jq
 
 RUN pip3 install --upgrade \
     awscli \
-    azure \
-    boto3 \
     docker \
     fire \
     junit-xml \
     psutil \
-    s3fs \
     xmlrunner
+# # azure \
+# boto3 \
+# s3fs \
 
 RUN mkdir -p $ARTIFACTS_ROOT
 RUN mkdir -p $TESTS_OUTPUT
