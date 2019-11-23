@@ -79,6 +79,8 @@ def smart_build(
     """
     Builds the dockerfile if needed but pulls it from the remote if possible.
     """
+    if bool(with_login):
+        login()
     if tag_as:
         tag_as = _to_list(tag_as)
     result = smart_split(dockerfile_path, tag_as)
