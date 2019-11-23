@@ -204,7 +204,7 @@ def login(raise_error=False):
         )
         if raise_error:
             raise RuntimeError(error_msg)
-        else
+        else:
             logging.warning(error_msg)
             return False
     logging.info(f"Logging into docker registry '{registry}' as user '{usr}'...")
