@@ -57,7 +57,7 @@ jobs:
           existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
   docker_ci_builder_publish:
     runs-on: ubuntu-latest
     steps:
@@ -70,7 +70,7 @@ jobs:
           existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
   docker_spark_publish:
     runs-on: ubuntu-latest
     steps:
@@ -83,7 +83,7 @@ jobs:
           existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
   docker_dbt_publish:
     runs-on: ubuntu-latest
     steps:
@@ -96,4 +96,4 @@ jobs:
           existingTag: commit-${{ github.sha }}
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}

@@ -35,7 +35,7 @@ inputs:
     description: "Docker user for login"
     required: false
     default: ""
-  dockerPass:
+  dockerPassword:
     description: "Docker password for login"
     required: false
     default: ""

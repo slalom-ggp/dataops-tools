@@ -179,7 +179,6 @@ def _smart_split(dockerfile_path, image_name):
         f"# NO NOT EDIT - file is generated automatically from `Dockerfile`\n\n"
         f"FROM {core_image_name}\n\n{derived_dockerfile}"
     )
-
     return [(core_image_name, core_dockerfile), (derived_image_name, derived_dockerfile)]
 
 

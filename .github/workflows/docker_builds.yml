@@ -50,7 +50,7 @@ jobs:
           dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
 
   ci_builder_update:
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
           dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
 
   docker_spark:
     runs-on: ubuntu-latest
@@ -82,7 +82,7 @@ jobs:
           dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
 
   docker_dbt:
     runs-on: ubuntu-latest
@@ -98,4 +98,4 @@ jobs:
           dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPass: ${{ secrets.DOCKER_SECRET }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
