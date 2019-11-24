@@ -237,6 +237,10 @@ def login(raise_error=False):
         jobs.run_command(
             f"docker login {registry} --username {usr} --password {pwd}", hide=True
         )
+        if registry == "index.docker.io":
+            jobs.run_command(
+                f"docker login --username {usr} --password {pwd}", hide=True
+            )
     except Exception as ex:
         if raise_error:
             raise RuntimeError(f"Docker login failed. {ex}")
