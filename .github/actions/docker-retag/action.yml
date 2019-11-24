@@ -11,9 +11,9 @@ runs:
     - --tag_as=${{ inputs.tagAs }}
     - --with_login=True
   env:
-    DOCKER_USERNAME: "{{ inputs.dockerUser }}"
-    DOCKER_PASSWORD: "{{ inputs.dockerPassword }}"
-    DOCKER_REGISTRY: "{{ inputs.dockerRegistry }}"
+    DOCKER_USERNAME: ${{ inputs.dockerUser }}
+    DOCKER_PASSWORD: ${{ inputs.dockerPassword }}
+    DOCKER_REGISTRY: ${{ inputs.dockerRegistry }}
 inputs:
   imageName:
     description: "The name of the image (without tags)"

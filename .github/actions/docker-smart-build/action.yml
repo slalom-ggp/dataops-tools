@@ -15,9 +15,9 @@ runs:
     - --push_core=${{ inputs.pushCore }}
     - --with_login=True
   env:
-    DOCKER_USERNAME: "{{ inputs.dockerUser }}"
-    DOCKER_PASSWORD: "{{ inputs.dockerPassword }}"
-    DOCKER_REGISTRY: "{{ inputs.dockerRegistry }}"
+    DOCKER_USERNAME: ${{ inputs.dockerUser }}
+    DOCKER_PASSWORD: ${{ inputs.dockerPassword }}
+    DOCKER_REGISTRY: ${{ inputs.dockerRegistry }}
 inputs:
   dockerfilePath:
     description: "The path to the dockerfile to build"
