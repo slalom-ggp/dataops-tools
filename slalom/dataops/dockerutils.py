@@ -244,8 +244,9 @@ def login(raise_error=False):
             logging.warning(f"Docker login failed. {ex}")
 
 
-@logged("applying tag '{new_tag}' to remote ECS image '{image_name}:{existing_tag}'")
-def ecs_retag(image_name, existing_tag, new_tag):
+@logged("applying tag '{tag_as}' to remote ECS image '{image_name}:{existing_tag}'")
+def ecs_retag(image_name, existing_tag, tag_as):
+    tag_as = _to_list(tag_as)
     if "amazonaws.com/" in image_name:
         image_name = image_name.split("amazonaws.com/")[1]
     get_manifest_cmd = (
@@ -254,24 +255,33 @@ def ecs_retag(image_name, existing_tag, new_tag):
         f" --query 'images[].imageManifest' --output text"
     )
     _, manifest = jobs.run_command(get_manifest_cmd, echo=False)
-    put_image_cmd = [
-        "aws",
-        "ecr",
-        "put-image",
-        "--repository-name",
-        image_name,
-        "--image-tag",
-        new_tag,
-        "--image-manifest",
-        manifest,
-    ]
-    return_code, output_text = jobs.run_command(
-        put_image_cmd, shell=False, echo=False, hide=True, raise_error=False
-    )
-    if return_code != 0 and "ImageAlreadyExistsException" in output_text:
-        logging.info("Image already exists. No tagging changes were made.")
-    elif return_code != 0:
-        raise RuntimeError(f"Could not retag the specified image.\n{output_text}")
+    for new_tag in tag_as:
+        if "amazonaws.com/" in new_tag:
+            new_tag = new_tag.split("amazonaws.com/")[1]
+        if ":" in new_tag:
+            if image_name != new_tag.split(":")[0]:
+                raise RuntimeError(
+                    f"Image names do not match: '{image_name}', '{new_tag.split(':')[0]}'"
+                )
+            new_tag = new_tag.split(":")[1]
+        put_image_cmd = [
+            "aws",
+            "ecr",
+            "put-image",
+            "--repository-name",
+            image_name,
+            "--image-tag",
+            new_tag,
+            "--image-manifest",
+            manifest,
+        ]
+        return_code, output_text = jobs.run_command(
+            put_image_cmd, shell=False, echo=False, hide=True, raise_error=False
+        )
+        if return_code != 0 and "ImageAlreadyExistsException" in output_text:
+            logging.info("Image already exists. No tagging changes were made.")
+        elif return_code != 0:
+            raise RuntimeError(f"Could not retag the specified image.\n{output_text}")
 
 
 @logged("applying tag '{tag_as}' to remote image '{image_name}:{existing_tag}'")
@@ -283,8 +293,11 @@ def remote_retag(image_name, existing_tag, tag_as, with_login=False):
         return ecs_retag(image_name, existing_tag, tag_as)
     existing_fullname = f"{image_name}:{existing_tag}"
     pull(existing_fullname)
-    for tag_str in tag_as:
-        new_fullname = f"{image_name}:{tag_str}"
+    for new_tag in tag_as:
+        if ":" in new_tag:
+            new_fullname = new_tag
+        else:
+            new_fullname = f"{image_name}:{new_tag}"
         tag(existing_fullname, new_fullname)
         push(new_fullname)
 
