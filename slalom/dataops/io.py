@@ -3,23 +3,32 @@ import tempfile
 from pathlib import Path
 import shutil
 
-import boto3
 import fire
-import s3fs
 
 from slalom.dataops.logs import get_logger, logged, logged_block
-
 
 logging = get_logger("slalom.dataops")
 try:
     import pandas as pd
 except Exception as ex:
-    logging.warning(
-        "Could not load pandas library. Some functionality may be disabled. "
-        "Please check whether pandas is installed or install via 'pip install pandas'."
-    )
     pd = None
+    warn_failed_import("pandas", "pip install pandas")
+try:
+    import boto3
+except Exception as ex:
+    boto3 = None
+    warn_failed_import("boto3", "pip install boto3")
+try:
+    import s3fs
+except Exception as ex:
+    s3fs = None
+    warn_failed_import("s3fs", "pip install s3fs")
 
+def warn_failed_import(library_name, install_hint):
+    logging.warning(
+        f"Could not load '{library_name}' library. Some functionality may be disabled. "
+        f"Please confirm '{library_name}' is installed or install via '{install_hint}'."
+    )
 
 try:
     from azure.datalake.store import core, lib, multithread
