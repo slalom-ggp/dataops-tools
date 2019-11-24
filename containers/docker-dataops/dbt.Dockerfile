@@ -1,4 +1,5 @@
-ARG source_image=python:3.7
+ARG source_image=slalomggp/spark:latest-dev
+# ARG source_image=python:3.7
 
 FROM ${source_image}
 

@@ -11,14 +11,10 @@ on:
 jobs:
   python_dataops_build:
     runs-on: ubuntu-latest
-    # needs: docker_spark
     strategy:
       max-parallel: 4
       matrix:
         python-version: [3.7]
-    env:
-      IMAGE_NAME: slalomggp/dataops
-      DOCKERFILE_PATH: ./Dockerfile
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
@@ -51,29 +47,6 @@ jobs:
       - name: Test with pytest
         run: |
           pytest
-      - name: Smart build and push (${{ env.IMAGE_NAME }})
-        uses: ./.github/actions/docker-smart-build
-        with:
-          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
-          tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
-          dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPassword: ${{ secrets.DOCKER_SECRET }}
-
-  ci_builder_update:
-    runs-on: ubuntu-latest
-    env:
-      IMAGE_NAME: slalomggp/ci-builder
-      DOCKERFILE_PATH: containers/ci-builder/Dockerfile
-    steps:
-      - name: Clone git repo
-        uses: actions/checkout@v1
-      - name: Smart build and push (${{ env.IMAGE_NAME }})
-        uses: ./.github/actions/docker-smart-build
-        with:
-          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
-          tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
-          dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPassword: ${{ secrets.DOCKER_SECRET }}
 
   docker_spark:
     runs-on: ubuntu-latest
@@ -93,6 +66,7 @@ jobs:
 
   docker_dbt:
     runs-on: ubuntu-latest
+    needs: docker_spark
     env:
       IMAGE_NAME: slalomggp/dbt
       DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
@@ -100,6 +74,26 @@ jobs:
       - name: Clone git repo
         uses: actions/checkout@v1
       - name: Smart build and push (slalom/dbt)
+        uses: ./.github/actions/docker-smart-build
+        with:
+          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
+          tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
+          dockerUser: ${{ secrets.DOCKER_USER }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
+
+  docker_dataops:
+    runs-on: ubuntu-latest
+    needs:
+      - python_dataops_build
+      - docker_spark
+      - docker_dbt
+    env:
+      IMAGE_NAME: slalomggp/dataops
+      DOCKERFILE_PATH: ./Dockerfile
+    steps:
+      - name: Clone git repo
+        uses: actions/checkout@v1
+      - name: Smart build and push (${{ env.IMAGE_NAME }})
         uses: ./.github/actions/docker-smart-build
         with:
           dockerfilePath: ${{ env.DOCKERFILE_PATH }}
