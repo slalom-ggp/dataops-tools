@@ -198,9 +198,9 @@ def ecs_login(region):
 
 
 def login(raise_error=False):
-    usr = environ.get("DOCKER_USERNAME", "")
-    pwd = environ.get("DOCKER_PASSWORD", "")
-    registry = environ.get("DOCKER_REGISTRY", "") or "index.docker.io"
+    usr = os.environ.get("DOCKER_USERNAME", "")
+    pwd = os.environ.get("DOCKER_PASSWORD", "")
+    registry = os.environ.get("DOCKER_REGISTRY", "") or "index.docker.io"
     if not usr and pwd:
         error_msg = (
             "Could not login to docker registry."
