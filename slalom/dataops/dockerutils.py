@@ -22,15 +22,16 @@ docker_client = docker.from_env()
 logging = get_logger("slalom.dataops.dockerutils")
 
 
-def build(dockerfile_path, tag_as):
+def build(dockerfile_path, tag_as, addl_args=None):
     """ Build an image. 'tag_as' can be a string or list of strings """
     folder_path = os.path.dirname(dockerfile_path)
+    addl_args = addl_args or ""
     tag_as = _to_list(tag_as)
     if tag_as:
         tags = " ".join([f"-t {t}" for t in tag_as])
-        cmd = f"docker build {tags} {folder_path} -f {dockerfile_path}"
+        cmd = f"docker build {addl_args} {tags} {folder_path} -f {dockerfile_path}"
     else:
-        cmd = f"docker build {folder_path} -f {dockerfile_path}"
+        cmd = f"docker build {addl_args} {folder_path} -f {dockerfile_path}"
     jobs.run_command(cmd)
 
 
@@ -57,14 +58,14 @@ def push(image_name):
     jobs.run_command(cmd)
 
 
-def smart_split(dockerfile_path: str, tag_as):
+def smart_split(dockerfile_path: str, tag_as, addl_args=None):
     tag_as = _to_list(tag_as)
     if tag_as:
         interim_image_name = tag_as[0].split(":")[0]
     else:
         interim_image_name = "untitled_image"
     (image_core, dockerfile_core), (image_derived, dockerfile_derived) = _smart_split(
-        dockerfile_path, interim_image_name
+        dockerfile_path, interim_image_name, addl_args=addl_args
     )
     dockerfile_path_core = os.path.realpath(f"{dockerfile_path}.core")
     dockerfile_path_derived = os.path.realpath(f"{dockerfile_path}.quick")
@@ -79,7 +80,12 @@ def smart_split(dockerfile_path: str, tag_as):
 
 @logged("smartly building '{dockerfile_path}' as {tag_as or '(none)'}")
 def smart_build(
-    dockerfile_path: str, tag_as=None, push_core=True, push_final=False, with_login=False
+    dockerfile_path: str,
+    tag_as=None,
+    push_core=True,
+    push_final=False,
+    with_login=False,
+    addl_args=None,
 ):
     """
     Builds the dockerfile if needed but pulls it from the remote if possible.
@@ -87,7 +93,7 @@ def smart_build(
     if bool(with_login):
         login()
     tag_as = _to_list(tag_as)
-    result = smart_split(dockerfile_path, tag_as)
+    result = smart_split(dockerfile_path, tag_as, addl_args=addl_args)
     image_core, dockerfile_path_core, image_derived, dockerfile_path_derived = result
     if dockerfile_path_derived is None and exists_remotely(image_core):
         logging.info(
@@ -98,12 +104,12 @@ def smart_build(
         return remote_retag(
             image_name=image_core.split(":")[0],
             existing_tag=image_core.split(":")[1],
-            tag_as=tag_as
+            tag_as=tag_as,
         )
     pull(image_core, skip_if_exists=True, silent=True)
     if not exists_locally(image_core):
         with logged_block(f"building interim (core) image as '{image_core}'"):
-            build(dockerfile_path_core, image_core)
+            build(dockerfile_path_core, image_core, addl_args=addl_args)
     if push_core:
         if exists_remotely(image_core):
             logging.info(f"Already exists. Skipping push of image '{image_derived}'")
@@ -112,7 +118,7 @@ def smart_build(
                 push(image_core)
     with logged_block(f"building '{dockerfile_path_derived}' as '{image_derived}'"):
         if dockerfile_path_derived:
-            build(dockerfile_path_derived, image_derived)
+            build(dockerfile_path_derived, image_derived, addl_args=addl_args)
         else:
             tag(image_core, image_derived)
     if tag_as:
@@ -165,7 +171,7 @@ def exists_remotely(image_name):
         return None
 
 
-def _smart_split(dockerfile_path, image_name):
+def _smart_split(dockerfile_path, image_name, addl_args=None):
     """ 
     Returns list of tuples: [
         (partial_image_name, partial_dockerfile_text)
@@ -177,6 +183,7 @@ def _smart_split(dockerfile_path, image_name):
     local files or artifacts required by ADD or COPY commands.
     """
     orig_text = io.get_text_file_contents(dockerfile_path)
+    addl_args = addl_args or ""
     core_dockerfile = ""
     derived_dockerfile = ""
     requires_context = False  # Whether we need file context to determine output
@@ -187,8 +194,8 @@ def _smart_split(dockerfile_path, image_name):
             core_dockerfile += line + "\n"
         else:
             derived_dockerfile += line + "\n"
-    core_md5 = hashlib.md5(core_dockerfile.encode("utf-8")).hexdigest()
-    full_md5 = hashlib.md5(orig_text.encode("utf-8")).hexdigest()
+    core_md5 = hashlib.md5((addl_args + core_dockerfile).encode("utf-8")).hexdigest()
+    full_md5 = hashlib.md5((addl_args + orig_text).encode("utf-8")).hexdigest()
     core_image_name = f"{image_name}:core-md5-{core_md5}"
     derived_image_name = f"{image_name}:md5-{full_md5}"
 
@@ -203,7 +210,7 @@ def _smart_split(dockerfile_path, image_name):
             f"FROM {core_image_name}\n\n{derived_dockerfile}"
         )
     else:
-        derived_dockerfile = None # No additional work to do.
+        derived_dockerfile = None  # No additional work to do.
     return [(core_image_name, core_dockerfile), (derived_image_name, derived_dockerfile)]
 
 
@@ -238,9 +245,7 @@ def login(raise_error=False):
             f"docker login {registry} --username {usr} --password {pwd}", hide=True
         )
         if registry == "index.docker.io":
-            jobs.run_command(
-                f"docker login --username {usr} --password {pwd}", hide=True
-            )
+            jobs.run_command(f"docker login --username {usr} --password {pwd}", hide=True)
     except Exception as ex:
         if raise_error:
             raise RuntimeError(f"Docker login failed. {ex}")
