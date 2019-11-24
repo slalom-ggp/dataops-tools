@@ -5,7 +5,9 @@ runs:
   image: "docker://slalomggp/ci-builder:latest-dev"
   args:
     # docker login -u $USER -p $PASS &&
-    - dockerutils
+    - python3
+    - -m
+    - slalom.dataops.dockerutils
     - smart_build
     - --dockerfile_path=${{ inputs.dockerfilePath }}
     - --tag_as=${{ inputs.tagAs }}
