@@ -55,7 +55,7 @@ jobs:
       - name: Clone git repo
         uses: actions/checkout@v1
       - name: Retag Dataops image
-        uses: ./github/actions/docker-retag
+        uses: ./.github/actions/docker-retag
         with:
           imageName: slalomggp/ci-builder
           existingTag: commit-${{ github.sha }}
