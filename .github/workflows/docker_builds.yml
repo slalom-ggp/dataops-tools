@@ -22,6 +22,13 @@ jobs:
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
+      - name: Smart build and push (slalomggp/ci-builder)
+        uses: ./.github/actions/docker-smart-build
+        with:
+          dockerfilePath: containers/ci-builder/Dockerfile
+          tagAs: slalomggp/ci-builder:latest-dev,slalomggp/ci-builder:commit-${{ github.sha }}
+          dockerUser: ${{ secrets.DOCKER_USER }}
+          dockerPassword: ${{ secrets.DOCKER_SECRET }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v1
         with:
