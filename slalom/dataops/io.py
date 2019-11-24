@@ -6,8 +6,14 @@ import shutil
 import fire
 
 from slalom.dataops.logs import get_logger, logged, logged_block
-
 logging = get_logger("slalom.dataops")
+
+def warn_failed_import(library_name, install_hint):
+    logging.warning(
+        f"Could not load '{library_name}' library. Some functionality may be disabled. "
+        f"Please confirm '{library_name}' is installed or install via '{install_hint}'."
+    )
+
 try:
     import pandas as pd
 except Exception as ex:
@@ -23,12 +29,6 @@ try:
 except Exception as ex:
     s3fs = None
     warn_failed_import("s3fs", "pip install s3fs")
-
-def warn_failed_import(library_name, install_hint):
-    logging.warning(
-        f"Could not load '{library_name}' library. Some functionality may be disabled. "
-        f"Please confirm '{library_name}' is installed or install via '{install_hint}'."
-    )
 
 try:
     from azure.datalake.store import core, lib, multithread
