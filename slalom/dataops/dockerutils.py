@@ -283,8 +283,8 @@ def remote_retag(image_name, existing_tag, tag_as, with_login=False):
         return ecs_retag(image_name, existing_tag, tag_as)
     existing_fullname = f"{image_name}:{existing_tag}"
     pull(existing_fullname)
-    for tag in tag_as:
-        new_fullname = f"{image_name}:{tag}"
+    for tag_str in tag_as:
+        new_fullname = f"{image_name}:{tag_str}"
         tag(existing_fullname, new_fullname)
         push(new_fullname)
 
