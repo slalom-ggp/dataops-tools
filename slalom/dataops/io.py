@@ -140,7 +140,7 @@ def _pick_cloud_function(filepath, s3_fn, adl_fn, else_fn):
 def file_exists(filepath):
     filepath = cleanup_filepath(filepath)
     fn = _pick_cloud_function(
-        filepath, s3_fn=s3_file_exists, adl_fn=None, else_fn=os.path.exists
+        filepath, s3_fn=s3_file_exists, adl_fn=adl_file_exists, else_fn=os.path.exists
     )
     return fn(filepath)
 
@@ -148,6 +148,12 @@ def file_exists(filepath):
 def s3_file_exists(filepath):
     s3 = s3fs.S3FileSystem(anon=False)
     return s3.exists(filepath)
+
+
+def adl_file_exists(filepath):
+    store_name, path = parse_adl_path(filepath)
+    adl = core.AzureDLFileSystem(adlCreds, store_name=store_name)
+    return adl.exists(path)
 
 
 def list_files(file_prefix):
@@ -207,23 +213,36 @@ def copy_file(source_file, target_file):
 
 
 # File deletion
-def delete_file(filepath):
+def delete_file(filepath, ignore_missing=True):
     fn = _pick_cloud_function(
-        filepath, s3_fn=delete_s3_file, adl_fn=delete_adl_file, else_fn=os.remove
+        filepath,
+        s3_fn=delete_s3_file,
+        adl_fn=delete_adl_file,
+        else_fn=delete_local_file
     )
-    return fn(filepath)
+    return fn(filepath, ignore_missing=ignore_missing)
 
 
-def delete_s3_file(s3_filepath):
+def delete_s3_file(s3_filepath, ignore_missing=True):
+    if ignore_missing and not s3_file_exists(s3_filepath):
+        return None
     boto = boto3.resource("s3")
     bucket_name, object_key = parse_s3_path(s3_filepath)
     boto.Object(bucket_name, object_key).delete()
 
 
-def delete_adl_file(adl_filepath):
+def delete_adl_file(adl_filepath, ignore_missing=True):
+    if ignore_missing and not adl_file_exists(adl_filepath):
+        return None
     store_name, filepath = parse_adl_path(adl_filepath)
     adl = core.AzureDLFileSystem(adlCreds, store_name=store_name)
     return adl.rm(filepath)
+
+
+def delete_local_file(filepath, ignore_missing=True):
+    if ignore_missing and not os.path.exists(filepath):
+        return None
+    os.remove(filepath)
 
 
 # File writes and uploads

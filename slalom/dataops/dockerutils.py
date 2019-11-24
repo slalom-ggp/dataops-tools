@@ -25,8 +25,8 @@ logging = get_logger("slalom.dataops.dockerutils")
 def build(dockerfile_path, tag_as):
     """ Build an image. 'tag_as' can be a string or list of strings """
     folder_path = os.path.dirname(dockerfile_path)
+    tag_as = _to_list(tag_as)
     if tag_as:
-        tag_as = _to_list(tag_as)
         tags = " ".join([f"-t {t}" for t in tag_as])
         cmd = f"docker build {tags} {folder_path} -f {dockerfile_path}"
     else:
@@ -35,7 +35,9 @@ def build(dockerfile_path, tag_as):
 
 
 def _to_list(str_or_list):
-    if isinstance(str_or_list, str):
+    if str_or_list is None:
+        return []
+    elif isinstance(str_or_list, str):
         return str_or_list.split(",")
     else:
         return str_or_list
@@ -43,8 +45,7 @@ def _to_list(str_or_list):
 
 def tag(image_name: str, tag_as):
     """ Tag an image. 'tag_as' can be a string or list of strings """
-    if tag_as:
-        tag_as = _to_list(tag_as)
+    tag_as = _to_list(tag_as)
     for tag in tag_as:
         jobs.run_command(f"docker tag {image_name} {tag}")
 
@@ -57,8 +58,8 @@ def push(image_name):
 
 
 def smart_split(dockerfile_path: str, tag_as):
+    tag_as = _to_list(tag_as)
     if tag_as:
-        tag_as = _to_list(tag_as)
         interim_image_name = tag_as[0].split(":")[0]
     else:
         interim_image_name = "untitled_image"
@@ -68,7 +69,11 @@ def smart_split(dockerfile_path: str, tag_as):
     dockerfile_path_core = os.path.realpath(f"{dockerfile_path}.core")
     dockerfile_path_derived = os.path.realpath(f"{dockerfile_path}.quick")
     io.create_text_file(filepath=dockerfile_path_core, contents=dockerfile_core)
-    io.create_text_file(filepath=dockerfile_path_derived, contents=dockerfile_derived)
+    if dockerfile_derived:
+        io.create_text_file(filepath=dockerfile_path_derived, contents=dockerfile_derived)
+    else:
+        io.delete_file(dockerfile_path_derived, ignore_missing=True)
+        dockerfile_path_derived = None
     return image_core, dockerfile_path_core, image_derived, dockerfile_path_derived
 
 
@@ -81,10 +86,20 @@ def smart_build(
     """
     if bool(with_login):
         login()
-    if tag_as:
-        tag_as = _to_list(tag_as)
+    tag_as = _to_list(tag_as)
     result = smart_split(dockerfile_path, tag_as)
     image_core, dockerfile_path_core, image_derived, dockerfile_path_derived = result
+    if dockerfile_path_derived is None and exists_remotely(image_core):
+        logging.info(
+            "Image with matching hash already exists "
+            "and no host files are referenced in Dockerfile."
+            f"Attempting to retag existing image '{image_core}' as '{tag_as}'..."
+        )
+        return remote_retag(
+            image_name=image_core.split(":")[0],
+            existing_tag=image_core.split(":")[1],
+            tag_as=tag_as
+        )
     pull(image_core, skip_if_exists=True, silent=True)
     if not exists_locally(image_core):
         with logged_block(f"building interim (core) image as '{image_core}'"):
@@ -96,7 +111,10 @@ def smart_build(
             with logged_block(f"pushing interim (core) image '{image_derived}'"):
                 push(image_core)
     with logged_block(f"building '{dockerfile_path_derived}' as '{image_derived}'"):
-        build(dockerfile_path_derived, image_derived)
+        if dockerfile_path_derived:
+            build(dockerfile_path_derived, image_derived)
+        else:
+            tag(image_core, image_derived)
     if tag_as:
         tag(image_derived, tag_as)
         if push_final:
@@ -179,10 +197,13 @@ def _smart_split(dockerfile_path, image_name):
         f"# Dockerfile.core - will be created and pushed as:\n"
         f"# \t{core_image_name}\n\n{core_dockerfile}"
     )
-    derived_dockerfile = (
-        f"# NO NOT EDIT - file is generated automatically from `Dockerfile`\n\n"
-        f"FROM {core_image_name}\n\n{derived_dockerfile}"
-    )
+    if derived_dockerfile:
+        derived_dockerfile = (
+            f"# NO NOT EDIT - file is generated automatically from `Dockerfile`\n\n"
+            f"FROM {core_image_name}\n\n{derived_dockerfile}"
+        )
+    else:
+        derived_dockerfile = None # No additional work to do.
     return [(core_image_name, core_dockerfile), (derived_image_name, derived_dockerfile)]
 
 
