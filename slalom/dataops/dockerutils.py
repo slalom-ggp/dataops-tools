@@ -201,7 +201,7 @@ def login(raise_error=False):
     usr = os.environ.get("DOCKER_USERNAME", "")
     pwd = os.environ.get("DOCKER_PASSWORD", "")
     registry = os.environ.get("DOCKER_REGISTRY", "") or "index.docker.io"
-    if not usr and pwd:
+    if not (usr and pwd):
         error_msg = (
             "Could not login to docker registry."
             "Missing env variable DOCKER_USERNAME or DOCKER_PASSWORD"
