@@ -1,4 +1,4 @@
-name: CI/CD and Docker Builds
+name: Automated Build and Test
 
 on:
   push:

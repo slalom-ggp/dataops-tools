@@ -1,17 +1,8 @@
-name: Publish to PyPi and Dockerhub
+name: Automated Publish (Release)
 
-# temporary for testing
 on:
-  push:
-    branches:
-      - "**"
-    paths-ignore:
-      - docs/**.md
-      - "*.md"
-
-# on:
-#   release:
-#     types: [published]
+  release:
+    types: [published]
 
 jobs:
   pypi_publish:
