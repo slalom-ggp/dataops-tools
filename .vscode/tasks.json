@@ -21,7 +21,7 @@
             }
         },
         {
-            "label": "▶ Terraform: Config                                   (terraform init)",
+            "label": "▶ Terraform: Config                                   (text editor)",
             "type": "process", // "shell" or "process"
             "command": ["nano"],
             "windows": {
