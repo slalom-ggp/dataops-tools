@@ -22,20 +22,23 @@ docker_client = docker.from_env()
 logging = get_logger("slalom.dataops.dockerutils")
 
 
-def build(dockerfile_path, tag_as):
+def build(dockerfile_path, tag_as, addl_args=None):
     """ Build an image. 'tag_as' can be a string or list of strings """
     folder_path = os.path.dirname(dockerfile_path)
+    addl_args = addl_args or ""
+    tag_as = _to_list(tag_as)
     if tag_as:
-        tag_as = _to_list(tag_as)
         tags = " ".join([f"-t {t}" for t in tag_as])
-        cmd = f"docker build {tags} {folder_path} -f {dockerfile_path}"
+        cmd = f"docker build {addl_args} {tags} {folder_path} -f {dockerfile_path}"
     else:
-        cmd = f"docker build {folder_path} -f {dockerfile_path}"
+        cmd = f"docker build {addl_args} {folder_path} -f {dockerfile_path}"
     jobs.run_command(cmd)
 
 
 def _to_list(str_or_list):
-    if isinstance(str_or_list, str):
+    if str_or_list is None:
+        return []
+    elif isinstance(str_or_list, str):
         return str_or_list.split(",")
     else:
         return str_or_list
@@ -43,8 +46,7 @@ def _to_list(str_or_list):
 
 def tag(image_name: str, tag_as):
     """ Tag an image. 'tag_as' can be a string or list of strings """
-    if tag_as:
-        tag_as = _to_list(tag_as)
+    tag_as = _to_list(tag_as)
     for tag in tag_as:
         jobs.run_command(f"docker tag {image_name} {tag}")
 
@@ -56,35 +58,58 @@ def push(image_name):
     jobs.run_command(cmd)
 
 
-def smart_split(dockerfile_path: str, tag_as):
+def smart_split(dockerfile_path: str, tag_as, addl_args=None):
+    tag_as = _to_list(tag_as)
     if tag_as:
-        tag_as = _to_list(tag_as)
         interim_image_name = tag_as[0].split(":")[0]
     else:
         interim_image_name = "untitled_image"
     (image_core, dockerfile_core), (image_derived, dockerfile_derived) = _smart_split(
-        dockerfile_path, interim_image_name
+        dockerfile_path, interim_image_name, addl_args=addl_args
     )
     dockerfile_path_core = os.path.realpath(f"{dockerfile_path}.core")
     dockerfile_path_derived = os.path.realpath(f"{dockerfile_path}.quick")
     io.create_text_file(filepath=dockerfile_path_core, contents=dockerfile_core)
-    io.create_text_file(filepath=dockerfile_path_derived, contents=dockerfile_derived)
+    if dockerfile_derived:
+        io.create_text_file(filepath=dockerfile_path_derived, contents=dockerfile_derived)
+    else:
+        io.delete_file(dockerfile_path_derived, ignore_missing=True)
+        dockerfile_path_derived = None
     return image_core, dockerfile_path_core, image_derived, dockerfile_path_derived
 
 
 @logged("smartly building '{dockerfile_path}' as {tag_as or '(none)'}")
-def smart_build(dockerfile_path: str, tag_as=None, push_core=True, push_final=False):
+def smart_build(
+    dockerfile_path: str,
+    tag_as=None,
+    push_core=True,
+    push_final=False,
+    with_login=False,
+    addl_args=None,
+):
     """
     Builds the dockerfile if needed but pulls it from the remote if possible.
     """
-    if tag_as:
-        tag_as = _to_list(tag_as)
-    result = smart_split(dockerfile_path, tag_as)
+    if bool(with_login):
+        login()
+    tag_as = _to_list(tag_as)
+    result = smart_split(dockerfile_path, tag_as, addl_args=addl_args)
     image_core, dockerfile_path_core, image_derived, dockerfile_path_derived = result
+    if dockerfile_path_derived is None and exists_remotely(image_core):
+        logging.info(
+            "Image with matching hash already exists "
+            "and no host files are referenced in Dockerfile."
+            f"Attempting to retag existing image '{image_core}' as '{tag_as}'..."
+        )
+        return remote_retag(
+            image_name=image_core.split(":")[0],
+            existing_tag=image_core.split(":")[1],
+            tag_as=tag_as,
+        )
     pull(image_core, skip_if_exists=True, silent=True)
     if not exists_locally(image_core):
         with logged_block(f"building interim (core) image as '{image_core}'"):
-            build(dockerfile_path_core, image_core)
+            build(dockerfile_path_core, image_core, addl_args=addl_args)
     if push_core:
         if exists_remotely(image_core):
             logging.info(f"Already exists. Skipping push of image '{image_derived}'")
@@ -92,7 +117,10 @@ def smart_build(dockerfile_path: str, tag_as=None, push_core=True, push_final=Fa
             with logged_block(f"pushing interim (core) image '{image_derived}'"):
                 push(image_core)
     with logged_block(f"building '{dockerfile_path_derived}' as '{image_derived}'"):
-        build(dockerfile_path_derived, image_derived)
+        if dockerfile_path_derived:
+            build(dockerfile_path_derived, image_derived, addl_args=addl_args)
+        else:
+            tag(image_core, image_derived)
     if tag_as:
         tag(image_derived, tag_as)
         if push_final:
@@ -143,7 +171,7 @@ def exists_remotely(image_name):
         return None
 
 
-def _smart_split(dockerfile_path, image_name):
+def _smart_split(dockerfile_path, image_name, addl_args=None):
     """ 
     Returns list of tuples: [
         (partial_image_name, partial_dockerfile_text)
@@ -155,6 +183,7 @@ def _smart_split(dockerfile_path, image_name):
     local files or artifacts required by ADD or COPY commands.
     """
     orig_text = io.get_text_file_contents(dockerfile_path)
+    addl_args = addl_args or ""
     core_dockerfile = ""
     derived_dockerfile = ""
     requires_context = False  # Whether we need file context to determine output
@@ -165,8 +194,8 @@ def _smart_split(dockerfile_path, image_name):
             core_dockerfile += line + "\n"
         else:
             derived_dockerfile += line + "\n"
-    core_md5 = hashlib.md5(core_dockerfile.encode("utf-8")).hexdigest()
-    full_md5 = hashlib.md5(orig_text.encode("utf-8")).hexdigest()
+    core_md5 = hashlib.md5((addl_args + core_dockerfile).encode("utf-8")).hexdigest()
+    full_md5 = hashlib.md5((addl_args + orig_text).encode("utf-8")).hexdigest()
     core_image_name = f"{image_name}:core-md5-{core_md5}"
     derived_image_name = f"{image_name}:md5-{full_md5}"
 
@@ -175,11 +204,13 @@ def _smart_split(dockerfile_path, image_name):
         f"# Dockerfile.core - will be created and pushed as:\n"
         f"# \t{core_image_name}\n\n{core_dockerfile}"
     )
-    derived_dockerfile = (
-        f"# NO NOT EDIT - file is generated automatically from `Dockerfile`\n\n"
-        f"FROM {core_image_name}\n\n{derived_dockerfile}"
-    )
-
+    if derived_dockerfile:
+        derived_dockerfile = (
+            f"# NO NOT EDIT - file is generated automatically from `Dockerfile`\n\n"
+            f"FROM {core_image_name}\n\n{derived_dockerfile}"
+        )
+    else:
+        derived_dockerfile = None  # No additional work to do.
     return [(core_image_name, core_dockerfile), (derived_image_name, derived_dockerfile)]
 
 
@@ -191,11 +222,40 @@ def ecs_login(region):
         )
         _, _ = jobs.run_command(ecs_login_cmd, hide=True)
     except Exception as ex:
-        raise RuntimeError("ECS login failed. {ex}")
+        raise RuntimeError(f"ECS login failed. {ex}")
 
 
-@logged("applying tag '{new_tag}' to remote ECS image '{image_name}:{existing_tag}'")
-def ecs_retag(image_name, existing_tag, new_tag):
+def login(raise_error=False):
+    usr = os.environ.get("DOCKER_USERNAME", "")
+    pwd = os.environ.get("DOCKER_PASSWORD", "")
+    registry = os.environ.get("DOCKER_REGISTRY", "") or "index.docker.io"
+    if not (usr and pwd):
+        error_msg = (
+            "Could not login to docker registry."
+            "Missing env variable DOCKER_USERNAME or DOCKER_PASSWORD"
+        )
+        if raise_error:
+            raise RuntimeError(error_msg)
+        else:
+            logging.warning(error_msg)
+            return False
+    logging.info(f"Logging into docker registry '{registry}' as user '{usr}'...")
+    try:
+        jobs.run_command(
+            f"docker login {registry} --username {usr} --password {pwd}", hide=True
+        )
+        if registry == "index.docker.io":
+            jobs.run_command(f"docker login --username {usr} --password {pwd}", hide=True)
+    except Exception as ex:
+        if raise_error:
+            raise RuntimeError(f"Docker login failed. {ex}")
+        else:
+            logging.warning(f"Docker login failed. {ex}")
+
+
+@logged("applying tag '{tag_as}' to remote ECS image '{image_name}:{existing_tag}'")
+def ecs_retag(image_name, existing_tag, tag_as):
+    tag_as = _to_list(tag_as)
     if "amazonaws.com/" in image_name:
         image_name = image_name.split("amazonaws.com/")[1]
     get_manifest_cmd = (
@@ -204,24 +264,51 @@ def ecs_retag(image_name, existing_tag, new_tag):
         f" --query 'images[].imageManifest' --output text"
     )
     _, manifest = jobs.run_command(get_manifest_cmd, echo=False)
-    put_image_cmd = [
-        "aws",
-        "ecr",
-        "put-image",
-        "--repository-name",
-        image_name,
-        "--image-tag",
-        new_tag,
-        "--image-manifest",
-        manifest,
-    ]
-    return_code, output_text = jobs.run_command(
-        put_image_cmd, shell=False, echo=False, hide=True, raise_error=False
-    )
-    if return_code != 0 and "ImageAlreadyExistsException" in output_text:
-        logging.info("Image already exists. No tagging changes were made.")
-    elif return_code != 0:
-        raise RuntimeError(f"Could not retag the specified image.\n{output_text}")
+    for new_tag in tag_as:
+        if "amazonaws.com/" in new_tag:
+            new_tag = new_tag.split("amazonaws.com/")[1]
+        if ":" in new_tag:
+            if image_name != new_tag.split(":")[0]:
+                raise RuntimeError(
+                    f"Image names do not match: '{image_name}', '{new_tag.split(':')[0]}'"
+                )
+            new_tag = new_tag.split(":")[1]
+        put_image_cmd = [
+            "aws",
+            "ecr",
+            "put-image",
+            "--repository-name",
+            image_name,
+            "--image-tag",
+            new_tag,
+            "--image-manifest",
+            manifest,
+        ]
+        return_code, output_text = jobs.run_command(
+            put_image_cmd, shell=False, echo=False, hide=True, raise_error=False
+        )
+        if return_code != 0 and "ImageAlreadyExistsException" in output_text:
+            logging.info("Image already exists. No tagging changes were made.")
+        elif return_code != 0:
+            raise RuntimeError(f"Could not retag the specified image.\n{output_text}")
+
+
+@logged("applying tag '{tag_as}' to remote image '{image_name}:{existing_tag}'")
+def remote_retag(image_name, existing_tag, tag_as, with_login=False):
+    tag_as = _to_list(tag_as)
+    if bool(with_login):
+        login()
+    if "amazonaws.com/" in image_name:
+        return ecs_retag(image_name, existing_tag, tag_as)
+    existing_fullname = f"{image_name}:{existing_tag}"
+    pull(existing_fullname)
+    for new_tag in tag_as:
+        if ":" in new_tag:
+            new_fullname = new_tag
+        else:
+            new_fullname = f"{image_name}:{new_tag}"
+        tag(existing_fullname, new_fullname)
+        push(new_fullname)
 
 
 def ecs_submit(

@@ -22,7 +22,7 @@ if [[ ! -z "$DETECT_HOSTNAME" ]]; then  # Set env var in order to initialize hos
 fi
 
 if [[ ! -z "$PROJECT_GIT_URL" ]]; then
-    echo "Cloning the project from git..."
+    echo "Cloning project from git ($PROJECT_GIT_URL)..."
     git clone $PROJECT_GIT_URL project
     cd project
     if [[ ! -z "$PROJECT_COMMIT" ]]; then

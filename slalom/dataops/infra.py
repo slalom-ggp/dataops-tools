@@ -2,8 +2,9 @@
 from joblib import Parallel, delayed
 import os
 import sys
-import fire
 from pathlib import Path
+
+import fire
 from tqdm import tqdm
 
 code_file = os.path.realpath(__file__)
@@ -20,8 +21,8 @@ logging = get_logger("slalom.dataops.infra", debug=DEBUG)
 
 
 def update_var_output(output_var):
-    _, val = jobs.run_command(f"terraform output {output_var}", echo=False)
-    io.create_text_file(os.path.join("outputs", output_var), contents=val)
+    return_code, output = jobs.run_command(f"terraform output {output_var}", echo=False)
+    io.create_text_file(os.path.join("outputs", output_var), contents=output)
     return True
 
 
@@ -34,7 +35,6 @@ def main(*args, infra_dir: str = "./infra/", save_output: bool = True):
     elif "init" in args:
         with logged_block("initializing terraform"):
             jobs.run_command("terraform init")
-
     if save_output:
         with logged_block("updating output files"):
             outputs_dir = os.path.join(infra_dir, "outputs")

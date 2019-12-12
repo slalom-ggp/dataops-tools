@@ -1,0 +1,55 @@
+name: Docker Smart Build
+description: Smartly builds a docker image
+runs:
+  using: "docker"
+  image: "docker://slalomggp/ci-builder:latest-dev"
+  args:
+    # docker login -u $USER -p $PASS &&
+    - python3
+    - -m
+    - slalom.dataops.dockerutils
+    - smart_build
+    - --dockerfile_path=${{ inputs.dockerfilePath }}
+    - --tag_as=${{ inputs.tagAs }}
+    - --push_final=${{ inputs.pushFinal }}
+    - --push_core=${{ inputs.pushCore }}
+    - --with_login=True
+    - --addl_args=${{ inputs.additionalArgs }}
+  env:
+    DOCKER_USERNAME: ${{ inputs.dockerUser }}
+    DOCKER_PASSWORD: ${{ inputs.dockerPassword }}
+    DOCKER_REGISTRY: ${{ inputs.dockerRegistry }}
+inputs:
+  dockerfilePath:
+    description: "The path to the dockerfile to build"
+    required: true
+  tagAs:
+    description: "The name of the new image name and tag (or a comma-separated list of the same)"
+    required: true
+  pushFinal:
+    description: "Boolean (0 or 1) specifying whether or not to push the final image"
+    required: false
+    default: 1
+  pushCore:
+    description: "Boolean (0 or 1) specifying whether or not to push the core image"
+    required: false
+    default: 1
+  dockerUser:
+    description: "Docker user for login"
+    required: false
+    default: ""
+  dockerPassword:
+    description: "Docker password for login"
+    required: false
+    default: ""
+  dockerRegistry:
+    description: "Docker registry for login (optional)"
+    required: false
+    default: "index.docker.io"
+  additionalArgs:
+    description: "Additional args to pass to 'docker build' command"
+    required: false
+    default: ""
+branding:
+  icon: chevrons-right
+  color: blue

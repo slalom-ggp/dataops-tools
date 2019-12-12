@@ -42,7 +42,15 @@ setup(
         ]
     },
     include_package_data=True,
-    install_requires=["fire", "joblib", "junit-xml", "matplotlib", "psutil", "xmlrunner"],
+    install_requires=[
+        "fire",
+        "joblib",
+        "junit-xml",
+        "matplotlib",
+        "psutil",
+        "tqdm",
+        "xmlrunner",
+    ],
     extras_require={
         "Azure": ["azure"],
         "AWS": ["awscli", "s3fs"],
