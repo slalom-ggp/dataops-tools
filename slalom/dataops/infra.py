@@ -26,7 +26,7 @@ def update_var_output(output_var):
     return True
 
 
-def main(*args, infra_dir: str = "./infra/", save_output: bool = True):
+def _main(*args, infra_dir: str = "./infra/", save_output: bool = True):
     infra_dir = os.path.realpath(infra_dir)
     os.chdir(infra_dir)
     if "apply" in args:
@@ -58,5 +58,9 @@ def main(*args, infra_dir: str = "./infra/", save_output: bool = True):
             )
 
 
+def main():
+    fire.Fire(_main)
+
+
 if __name__ == "__main__":
-    fire.Fire(main)
+    main()

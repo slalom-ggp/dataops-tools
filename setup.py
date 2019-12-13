@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 import os
 from pathlib import Path
 
@@ -35,10 +35,10 @@ setup(
     package_data={"": [version_filepath]},
     entry_points={
         "console_scripts": [  # Register CLI commands: s-spark, s-docker
-            "s-docker=slalom.dataops.dockerutils:main"
-            "s-infra=slalom.dataops.infra:main"
-            "s-spark=slalom.dataops.sparkutils:main"
-            "s-io=slalom.dataops.io:main"
+            "s-docker = slalom.dataops.dockerutils:main",
+            "s-infra = slalom.dataops.infra:main",
+            "s-spark = slalom.dataops.sparkutils:main",
+            "s-io = slalom.dataops.io:main",
         ]
     },
     include_package_data=True,

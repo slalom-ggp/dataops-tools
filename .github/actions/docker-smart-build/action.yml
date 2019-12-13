@@ -2,7 +2,7 @@ name: Docker Smart Build
 description: Smartly builds a docker image
 runs:
   using: "docker"
-  image: "docker://slalomggp/ci-builder:latest-dev"
+  image: "docker://slalomggp/ci-builder:latest"
   args:
     # docker login -u $USER -p $PASS &&
     - python3
