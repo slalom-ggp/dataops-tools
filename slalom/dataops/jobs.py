@@ -237,6 +237,7 @@ def run_command(
     shell=True,
     daemon=False,
     hide=False,
+    cwd=None,
 ):
     """ Run a CLI command and return a tuple: (return_code, output_text) """
     loglines = []
@@ -252,6 +253,7 @@ def run_command(
         stdout=subprocess.PIPE,
         universal_newlines=True,
         shell=shell,
+        cwd=cwd,
     )
     if log_file_path:
         logfile = open(log_file_path, "w", encoding="utf-8")

@@ -7,6 +7,8 @@
 **.bak
 **/*Dockerfile.core
 **/*Dockerfile.quick
+build/lib
+**.egg-info
 
 # SSH keys
 **/secrets/**

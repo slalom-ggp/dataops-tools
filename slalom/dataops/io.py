@@ -6,13 +6,17 @@ import shutil
 import fire
 
 from slalom.dataops.logs import get_logger, logged, logged_block
+from slalom.dataops import jobs
+
 logging = get_logger("slalom.dataops")
+
 
 def warn_failed_import(library_name, install_hint):
     logging.warning(
         f"Could not load '{library_name}' library. Some functionality may be disabled. "
         f"Please confirm '{library_name}' is installed or install via '{install_hint}'."
     )
+
 
 try:
     import pandas as pd
@@ -114,6 +118,18 @@ def parse_adl_path(adl_path):
     return store_name, object_key
 
 
+def parse_git_path(git_path):
+    """ Returns tuple (repo_url, git_ref, code_path) """
+    git_ref = "master"
+    repo_url, code_path = git_path.replace("git://", "").split("//")
+    if "#" in repo_url:
+        repo_url, git_ref = repo_url.split("#")
+    repo_url = repo_url.rstrip(".git")
+    if not code_path:
+        code_path = "/"
+    return repo_url, git_ref, code_path
+
+
 def is_s3(path_or_paths, agg_fn=all):
     check_fn = lambda s: s.startswith("s3")
     return _check_one_or_all(path_or_paths, check_fn, agg_fn)
@@ -124,11 +140,18 @@ def is_adl(path_or_paths, agg_fn=all):
     return _check_one_or_all(path_or_paths, check_fn, agg_fn)
 
 
-def _pick_cloud_function(filepath, s3_fn, adl_fn, else_fn):
+def is_git(path_or_paths, agg_fn=all):
+    check_fn = lambda s: s.startswith("git")
+    return _check_one_or_all(path_or_paths, check_fn, agg_fn)
+
+
+def _pick_cloud_function(filepath, s3_fn, adl_fn, git_fn=None, else_fn=None):
     if is_s3(filepath):
         fn = s3_fn
     elif is_adl(filepath):
         fn = adl_fn
+    elif is_git(filepath):
+        fn = git_fn
     else:
         fn = else_fn
     if not fn:
@@ -164,6 +187,11 @@ def list_files(file_prefix):
         else_fn=lambda prefix: [os.path.join(prefix, x) for x in os.listdir(prefix)],
     )
     return fn(file_prefix)
+
+
+# Function Aliases:
+ls = list_files
+dir = list_files
 
 
 @logged("listing S3 files from '{s3_prefix}'")
@@ -215,10 +243,7 @@ def copy_file(source_file, target_file):
 # File deletion
 def delete_file(filepath, ignore_missing=True):
     fn = _pick_cloud_function(
-        filepath,
-        s3_fn=delete_s3_file,
-        adl_fn=delete_adl_file,
-        else_fn=delete_local_file
+        filepath, s3_fn=delete_s3_file, adl_fn=delete_adl_file, else_fn=delete_local_file
     )
     return fn(filepath, ignore_missing=ignore_missing)
 
@@ -312,7 +337,7 @@ def create_folder(folderpath):
 # File downloads
 def download_file(remote_path, local_path):
     fn = _pick_cloud_function(
-        remote_path, s3_fn=download_s3_file, adl_fn=None, else_fn=None
+        remote_path, s3_fn=download_s3_file, adl_fn=None, else_fn=shutil.copyfile
     )
     return fn(remote_path, local_path)
 
@@ -325,6 +350,42 @@ def download_s3_file(s3_path, local_path):
     s3_bucket.download_file(object_key, local_path)
 
 
+def get_text_file_contents(filepath, encoding="utf-8"):
+    filepath = cleanup_filepath(filepath)
+    with open(filepath, "r", encoding=encoding) as f:
+        return f.read()
+
+
+# Folder downloads:
+@logged(desc_detail="{remote_folder}::{local_folder}")
+def download_folder(remote_folder, local_folder, as_subfolder=False):
+    """ Expects that destination folder does not exist or is empty """
+    if as_subfolder:
+        local_folder = f"{local_folder}/{os.basename(remote_folder)}"
+    fn = _pick_cloud_function(
+        remote_folder,
+        s3_fn=download_s3_folder,
+        adl_fn=_download_folder,
+        git_fn=download_git_folder,
+        else_fn=_download_folder,
+    )
+    return fn(remote_folder, local_folder)
+
+
+@logged(desc_detail="{remote_folder}::{local_folder}")
+def _download_folder(remote_folder, local_folder):
+    for remote_filepath in list_files(remote_folder):
+        sub_path = remote_filepath.split(remote_folder)[1]
+        sub_path = sub_path.lstrip("/\\")
+        local_filepath = os.path.join(local_folder, sub_path)
+        logging.info(f"Copying {remote_filepath} to {local_filepath}...")
+        download_file(remote_filepath, local_filepath)
+
+
+# Alias 'copy_folder'
+copy_folder = download_folder
+
+
 @logged(desc_detail="{s3_prefix}::{local_folder}")
 def download_s3_folder(s3_prefix, local_folder):
     for s3_file in list_s3_files(os.path.join(s3_prefix, "")):
@@ -332,10 +393,18 @@ def download_s3_folder(s3_prefix, local_folder):
         download_s3_file(s3_file, target_file)
 
 
-def get_text_file_contents(filepath, encoding="utf-8"):
-    filepath = cleanup_filepath(filepath)
-    with open(filepath, "r", encoding=encoding) as f:
-        return f.read()
+def download_git_repo(repo_url, git_ref, target_dir):
+    jobs.run_command(f"git clone https://{repo_url} .", cwd=target_dir)
+    if git_ref != "master":
+        jobs.run_command(f"git fetch", cwd=target_dir)
+        jobs.run_command(f"git checkout {git_ref}", cwd=target_dir)
+
+
+def download_git_folder(git_path, local_folder):
+    repo_url, git_ref, code_path = parse_git_path(git_path)
+    temp_folder = get_temp_dir()
+    download_git_repo(repo_url, git_ref, temp_folder)
+    copy_folder(os.path.join(temp_folder, code_path), local_folder)
 
 
 # Function wrappers for cloud IO
