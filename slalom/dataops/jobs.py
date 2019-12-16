@@ -282,7 +282,7 @@ def run_command(
         raise RuntimeError(f"Command failed: {cmd}\n\n")
     else:
         return_code = proc.returncode
-        if return_code != 0 and raise_error:
+        if return_code != 0 and raise_error and ((daemon == False) or (return_code is not None)):
             err_msg = f"Command failed (exit code {return_code}): {cmd}"
             if not echo:
                 print_str = output_text

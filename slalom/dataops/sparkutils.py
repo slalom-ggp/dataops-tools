@@ -1,4 +1,4 @@
-""" Standard sparkutils module """
+""" slalom.dataops.sparkutils module """
 
 import datetime
 import time
@@ -27,6 +27,7 @@ from pyspark.sql.functions import (
 )
 
 from slalom.dataops import io
+from slalom.dataops import jobs
 from slalom.dataops.logs import (
     get_logger,
     logged,
@@ -34,7 +35,7 @@ from slalom.dataops.logs import (
     _get_printable_context,
     bytes_to_string,
 )
-
+from slalom.dataops import pandasutils
 
 logging = get_logger("slalom.dataops.sparkutils")
 
@@ -53,9 +54,6 @@ METASTORE_DB_PASSWORD = os.environ.get("METASTORE_DB_PASSWORD", None)
 SUPPORT_CLUSTER_BY = False
 
 DOCKER_SPARK_IMAGE = os.environ.get("DOCKER_SPARK_IMAGE", "slalomggp/dataops:latest-dev")
-SPARK_IMAGE_CMD = "sparkutils start_server"
-# SPARK_IMAGE_CMD = "python3 -m slalom.dataops.sparkutils start_server"
-# SPARK_IMAGE_CMD = "jupyter lab"
 CONTAINER_ENDPOINT = "spark://localhost:7077"
 SPARK_DRIVER_MEMORY = "4g"
 SPARK_EXECUTOR_MEMORY = "4g"
@@ -183,10 +181,14 @@ def _add_aws_creds_config(hadoop_conf):
     )
     try:
         key, secret = _get_aws_creds()
-        if key:
-            hadoop_conf["fs.s3a.access.key"] = key
-        if secret:
-            hadoop_conf["fs.s3a.secret.key"] = secret
+        logging.info(
+            f"Successfully loaded AWS creds for access key: ****************{key[-4:]}"
+        )
+        # TODO: Confirm that these settings are not needed (avoid leaks to logs)
+        # if key:
+        #     hadoop_conf["fs.s3a.access.key"] = key
+        # if secret:
+        #     hadoop_conf["fs.s3a.secret.key"] = secret
     except Exception as ex:
         logging.info(f"Could not load AWS creds ({ex})")
     return hadoop_conf
@@ -227,8 +229,8 @@ thrift = None
 _spark_container = None
 
 
-@logged("starting spark container '{spark_image}'")
-def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE):
+@logged("starting spark container '{spark_image}' with args: with_jupyter={with_jupyter}")
+def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
     global _spark_container
 
     if _spark_container:
@@ -238,6 +240,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE):
         "7077": "7077",  # Standalone master driver
         "8080": "8080",  # Standalone-mode master Web UI
         "8081": "8081",  # Standalone-mode worker Web UI
+        "8888": "8888",  # Jupyter Notebook Server
         "10000": "10000",  # Thrift JDBC port for SQL queries
         "18080": "18080",  # History Server Web UI
     }
@@ -262,10 +265,13 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE):
                 old_container.stop()
     except Exception as _:
         pass
+    spark_image_cmd = "sparkutils start_server"
+    if with_jupyter:
+        spark_image_cmd = f"{spark_image_cmd} --with_jupyter"
     _spark_container = docker_client.containers.run(
         image=spark_image,
         name="spark_server",
-        command=SPARK_IMAGE_CMD,
+        command=spark_image_cmd,
         detach=True,
         auto_remove=True,
         ports=port_map,
@@ -281,7 +287,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE):
     for line in _spark_container.logs(stream=True, until=int(start + MAX_WAIT_TIME)):
         logging.info(f"SPARK CONTAINER LOG: {line.decode('utf-8').rstrip()}")
         # time.sleep(0.2)
-        if "Spark server started. Monitor via" in line.decode("utf-8"):
+        if "serving spark requests" in line.decode("utf-8"):
             logging.info(
                 f"Spark container reported success after "
                 f"{int(time.time() - start)} seconds"
@@ -307,13 +313,15 @@ def _destroy_spark_container():
         _spark_container = None
 
 
-@logged("initializing spark")
-def _init_spark(dockerized=False):
+@logged(
+    "initializing spark with args: dockerized={dockerized}, with_jupyter={with_jupyter}"
+)
+def _init_spark(dockerized=False, with_jupyter=False):
     """ Return an initialized spark object """
     global spark, sc, thrift
 
     if dockerized:
-        container = _init_spark_container()
+        container = _init_spark_container(with_jupyter=with_jupyter)
         # context = SparkContext(conf=conf)
         os.environ["PYSPARK_PYTHON"] = sys.executable
         with logged_block("connecting to spark container"):
@@ -334,12 +342,10 @@ def _init_local_spark():
         # for fn in [conf.set, SparkContext.setSystemProperty, context.setSystemProperty]:
         for k, v in hadoop_conf.items():
             fn(k, v)
-    hadoop_conf = _get_hadoop_conf()
     os.environ["PYSPARK_PYTHON"] = sys.executable
     with logged_block("creating spark session"):
         spark = (
-            SparkSession.builder
-            .config(conf=conf)
+            SparkSession.builder.config(conf=conf)
             .master("local")
             .appName("Python Spark")
             .enableHiveSupport()
@@ -363,6 +369,23 @@ def _init_local_spark():
         sc.addPyFile(jar_path)
     else:
         thrift = None
+
+
+@logged("starting Jupyter notebooks server")
+def start_jupyter(nb_directory="/home/jovyan/work", nb_token="qwerty123"):
+    jupyter_run_command = (
+        f"jupyter lab"
+        f" --NotebookApp.notebook_dir='{nb_directory}'"
+        f" --NotebookApp.token='{nb_token}'"
+        f" --allow-root"
+    )
+    log_file = "jupyter_log.txt"
+    jobs.run_command(jupyter_run_command, daemon=True, log_file_path=log_file)
+    time.sleep(5)
+    logging.info("\nJUPYTER_LOG:".join(io.get_text_file_contents(log_file).splitlines()))
+    logging.info(
+        "Jupyter notebooks server started at: https://localhost:8888/?token=qwerty123"
+    )
 
 
 def get_spark(dockerized=False):
@@ -515,11 +538,14 @@ def load_to_spark_table(
     file_path = _verify_path(file_path)
 
     if ".xlsx" in file_path.lower():
-        logging.debug(
-            f"Using pandas to load spark table '{table_name}' from file '{file_path}'..."
-        )
-        df = get_pandas_df(file_path)
-        create_spark_table(df, table_name, print_n_rows=print_n_rows)
+        if pd:
+            logging.debug(
+                f"Using pandas to load spark table '{table_name}' from '{file_path}'..."
+            )
+            df = pandasutils.get_pandas_df(file_path)
+            create_spark_table(df, table_name, print_n_rows=print_n_rows)
+        else:
+            pandasutils._raise_if_missing_pandas()
     else:
         logging.debug(f"Loading spark table '{table_name}' from file '{file_path}'...")
         df = spark.read.csv(
@@ -598,6 +624,14 @@ def save_spark_table(
         )
 
 
+def get_spark_table_as_pandas(table_name):
+    if not pd:
+        raise RuntimeError(
+            "Could not execute get_pandas_from_spark_table(): Pandas library not loaded."
+        )
+    return spark.sql(f"SELECT * FROM {table_name}").toPandas()
+
+
 # Create Dates table
 def create_calendar_table(table_name, start_date, end_date):
     num_days = (end_date - start_date).days
@@ -609,128 +643,41 @@ def create_calendar_table(table_name, start_date, end_date):
     create_spark_table(df, table_name)
 
 
-# Pandas functions
-def pandas_read_csv_dir(csv_dir, usecols=None, dtype=None):
-    if not pd:
-        raise RuntimeError(
-            "Could not execute pandas_read_csv_dir(): Pandas library was not loaded."
+@logged(
+    "starting spark server with args:"
+    " dockerized={dockerized}, with_jupyter={with_jupyter}"
+)
+def start_server(dockerized: bool = None, with_jupyter: bool = True):
+    if dockerized is None:
+        dockerized = (
+            False
+            if any(["SPARK_HOME" in os.environ, "HADOOP_CONF_DIR" in os.environ])
+            else True
         )
-    df_list = []
-    for s3_path in io.list_s3_files(csv_dir):
-        if "_SUCCESS" not in s3_path:
-            if io.USE_SCRATCH_DIR:
-                scratch_dir = io.get_scratch_dir()
-                filename = os.path.basename(s3_path)
-                csv_path = os.path.join(scratch_dir, filename)
-                if os.path.exists(csv_path):
-                    logging.info(
-                        f"Skipping download of '{s3_path}'. File exists as: '{csv_path}' "
-                        "(If you do not want to use this file, please delete "
-                        "the file or unset the USE_SCRATCH_DIR environment variable.)"
-                    )
-                else:
-                    logging.info(
-                        f"Downloading S3 file '{s3_path}' to scratch dir: '{csv_path}'"
-                    )
-                io.download_s3_file(s3_path, csv_path)
-            else:
-                logging.info(f"Reading from S3 file: {s3_path}")
-                csv_path = s3_path
-            df = pd.read_csv(
-                csv_path, index_col=None, header=0, usecols=usecols, dtype=dtype
-            )
-            df_list.append(df)
-    logging.info(f"Concatenating datasets from: {csv_dir}")
-    ret_val = pd.concat(df_list, axis=0, ignore_index=True)
-    logging.info("Dataset concatenation was successful.")
-    return ret_val
-
-
-def get_pandas_from_spark_table(table_name):
-    if not pd:
-        raise RuntimeError(
-            "Could not execute get_pandas_from_spark_table(): Pandas library not loaded."
-        )
-    return spark.sql(f"SELECT * FROM {table_name}").toPandas()
-
-
-def get_pandas_df(source_path, usecols=None):
-    if not pd:
-        raise RuntimeError(
-            "Could not execute get_pandas_df(): Pandas library not loaded."
-        )
-    if ".xlsx" in source_path.lower():
-        df = pandas_read_excel_sheet(source_path, usecols=usecols)
-    else:
-        try:
-            df = pd.read_csv(source_path, low_memory=False, usecols=usecols)
-        except Exception as ex:
-            if "Error tokenizing data. C error" in str(ex):
-                logging.warning(
-                    f"Failed read_csv() using default 'c' engine. "
-                    f"Retrying with engine='python'...\n{ex}"
-                )
-                df = pd.read_csv(source_path, usecols=usecols, engine="python")
-            else:
-                raise ex
-    return df
-
-
-def pandas_read_excel_sheet(sheet_path, usecols=None):
-    """
-    Expects path in form of '/path/to/file.xlsx/#sheet name'
-    S3 paths are excepted.
-    """
-    if not pd:
-        raise RuntimeError(
-            "Could not execute pandas_read_excel_sheet(): Pandas library not loaded."
-        )
-    filepath, sheetname = sheet_path.split("/#")
-    df = pd.read_excel(filepath, sheetname=sheetname, usecols=usecols)
-    return df
-
-
-def print_pandas_mem_usage(df, df_name, print_fn=logging.info, min_col_size_mb=500):
-    if not pd:
-        logging.warning("Pandas support is not installed. Try 'pip install pandas'.")
-        return None
-    col_mem_usage = df.memory_usage(index=True, deep=True).sort_values(ascending=False)
-    ttl_mem_usage = col_mem_usage.sum()
-    col_mem_usage = col_mem_usage.nlargest(n=5)
-    col_mem_usage = col_mem_usage[col_mem_usage > min_col_size_mb * 1024 * 1024]
-    col_mem_usage = col_mem_usage.apply(bytes_to_string)
-    msg = f"Dataframe '{df_name}' mem usage: {bytes_to_string(ttl_mem_usage)}"
-    if col_mem_usage.size:
-        col_usage_str = ", ".join(
-            [
-                f"{col}({'Index' if col == 'Index' else df[col].dtype}):{size}"
-                for col, size in col_mem_usage.iteritems()
-            ]
-        )
-        msg += f". Largest columns (over {min_col_size_mb}MB): {col_usage_str}"
-    print_fn(msg)
-    return msg
-
-
-def start_server(dockerized=False):
     if dockerized:
-        container = _init_spark_container()
+        container = _init_spark_container(with_jupyter=with_jupyter)
         with logged_block("hosting spark container"):
             while True:
                 time.sleep(30)
     else:
-        _init_spark(dockerized=dockerized)
+        _init_spark(dockerized=dockerized, with_jupyter=with_jupyter)
         logging.info(
             "Spark server started. "
             "Monitor via http://localhost:4040 or http://127.0.0.1:4040"
         )
+        if with_jupyter:
+            start_jupyter()
+        else:
+            logging.info("Skipping Jupyter notebooks server launch...")
         with logged_block("serving spark requests"):
+            # NOTE: When run containerized, the above message triggers
+            #       the host to stop echoing logs
             while True:
                 time.sleep(30)
 
 
 def main():
-    fire.Fire()
+    fire.Fire({"start_spark": start_server, "start_jupyter": start_jupyter})
 
 
 if __name__ == "__main__":
