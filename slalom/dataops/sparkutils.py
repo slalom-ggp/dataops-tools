@@ -677,7 +677,7 @@ def start_server(dockerized: bool = None, with_jupyter: bool = True):
 
 
 def main():
-    fire.Fire({"start_spark": start_server, "start_jupyter": start_jupyter})
+    fire.Fire({"start_server": start_server, "start_jupyter": start_jupyter})
 
 
 if __name__ == "__main__":
