@@ -1,4 +1,4 @@
-ARG source_image=slalomggp/spark:latest-dev
+ARG source_image=slalomggp/dbt:latest-dev
 
 FROM ${source_image}
 
