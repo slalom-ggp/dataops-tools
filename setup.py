@@ -34,7 +34,8 @@ setup(
     keywords=["DATAOPS", "SLALOM", "DATA", "AUTOMATION", "CI/CD", "DEVOPS"],
     package_data={"": [version_filepath]},
     entry_points={
-        "console_scripts": [  # Register CLI commands: s-spark, s-docker
+        "console_scripts": [
+            # Register CLI commands:
             "s-docker = slalom.dataops.dockerutils:main",
             "s-infra = slalom.dataops.infra:main",
             "s-spark = slalom.dataops.sparkutils:main",
@@ -43,11 +44,13 @@ setup(
     },
     include_package_data=True,
     install_requires=[
+        "docker",
         "fire",
         "joblib",
         "junit-xml",
         "matplotlib",
         "psutil",
+        "pyspark",
         "tqdm",
         "xmlrunner",
     ],
@@ -55,8 +58,6 @@ setup(
         "Azure": ["azure"],
         "AWS": ["awscli", "s3fs"],
         "Pandas": ["pandas"],
-        "Spark": ["pyspark"],
-        "Docker": ["docker"],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",  # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package

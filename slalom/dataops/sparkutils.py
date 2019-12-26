@@ -27,6 +27,7 @@ from pyspark.sql.functions import (
 )
 
 from slalom.dataops import io
+from slalom.dataops import dockerutils
 from slalom.dataops import jobs
 from slalom.dataops.logs import (
     get_logger,
@@ -46,6 +47,7 @@ except Exception as ex:
     logging.warning(f"Could not load pandas library. Try 'pip install pandas'. {ex}")
 
 
+_SERVING_SPARK_REQUESTS = "serving spark requests"
 ENABLE_SQL_JDBC = bool(os.environ.get("ENABLE_SQL_JDBC", False))
 METASTORE_TYPE = os.environ.get("METASTORE_TYPE", "Derby")
 METASTORE_SERVER = os.environ.get("METASTORE_SERVER", None) or "localhost"
@@ -57,7 +59,7 @@ DOCKER_SPARK_IMAGE = os.environ.get("DOCKER_SPARK_IMAGE", "slalomggp/dataops:lat
 CONTAINER_ENDPOINT = "spark://localhost:7077"
 SPARK_DRIVER_MEMORY = "4g"
 SPARK_EXECUTOR_MEMORY = "4g"
-SPARK_WAREHOUSE_ROOT = "/home/data/spark_wh"
+SPARK_WAREHOUSE_DIR = os.environ.get("SPARK_WAREHOUSE_DIR", "/spark_warehouse/data")
 SPARK_S3_PREFIX = "s3a://"
 SPARK_LOG_LEVEL = os.environ.get(
     "SPARK_LOG_LEVEL", "ERROR"
@@ -84,7 +86,7 @@ def _add_derby_metastore_config(hadoop_conf):
     derby_log = "/home/data/derby.log"
     derby_home = "/home/data/derby_home"
     derby_hive_metastore_dir = "/home/data/hive_metastore_db"
-    for folder in [SPARK_WAREHOUSE_ROOT, derby_hive_metastore_dir]:
+    for folder in [SPARK_WAREHOUSE_DIR, derby_hive_metastore_dir]:
         io.create_folder(derby_home)
     derby_options = (
         f"-Dderby.stream.error.file={derby_log} -Dderby.system.home={derby_home}"
@@ -200,7 +202,7 @@ def _get_hadoop_conf():
         "spark.executor.memory": SPARK_EXECUTOR_MEMORY,
         "spark.jars.packages": "io.delta:delta-core_2.11:0.4.0",
         "spark.logConf": "true",
-        "spark.sql.warehouse.dir": SPARK_WAREHOUSE_ROOT,
+        "spark.sql.warehouse.dir": SPARK_WAREHOUSE_DIR,
         "spark.ui.showConsoleProgress": "false",  # suppress updates e.g. 'Stage 2=====>'
         "log4j.rootCategory": SPARK_LOG_LEVEL,
         "log4j.logger.org.apache.hive.service.server": SPARK_LOG_LEVEL,
@@ -259,10 +261,16 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
     docker_client = docker.from_env()  # WSL1
     # docker_client = docker.DockerClient(base_url="npipe:////./pipe/docker_wsl")  # WSL2
     try:
+        dockerutils.pull(spark_image)
+    except Exception as ex:
+        logging.warning(f"Could not pull latest spark image '{spark_image}'. {ex}")
+    try:
         old_container = docker_client.containers.get("spark_server")
         if old_container:
             with logged_block("terminating previous 'spark_server' docker container"):
                 old_container.stop()
+                logging.info("Waiting for cleanup of old spark container...")
+                time.sleep(2)
     except Exception as _:
         pass
     spark_image_cmd = "sparkutils start_server"
@@ -287,7 +295,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
     for line in _spark_container.logs(stream=True, until=int(start + MAX_WAIT_TIME)):
         logging.info(f"SPARK CONTAINER LOG: {line.decode('utf-8').rstrip()}")
         # time.sleep(0.2)
-        if "serving spark requests" in line.decode("utf-8"):
+        if _SERVING_SPARK_REQUESTS in line.decode("utf-8"):
             logging.info(
                 f"Spark container reported success after "
                 f"{int(time.time() - start)} seconds"
@@ -316,7 +324,7 @@ def _destroy_spark_container():
 @logged(
     "initializing spark with args: dockerized={dockerized}, with_jupyter={with_jupyter}"
 )
-def _init_spark(dockerized=False, with_jupyter=False):
+def _init_spark(dockerized=False, with_jupyter=False, daemon=False):
     """ Return an initialized spark object """
     global spark, sc, thrift
 
@@ -328,13 +336,20 @@ def _init_spark(dockerized=False, with_jupyter=False):
             spark = SparkSession.builder.master(CONTAINER_ENDPOINT).getOrCreate()
         spark.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
         sc = spark.sparkContext
+    elif daemon:
+        cmd = f"{sys.executable} -m slalom.dataops.sparkutils start_server"
+        wait_test = lambda line: _SERVING_SPARK_REQUESTS in line
+        wait_max = 60  # Wait at max for 60 seconds
+        if with_jupyter:
+            cmd = f"{cmd} --with_jupyter"
+        jobs.run_command(cmd, daemon=True, wait_test=wait_test, wait_max=wait_max)
     else:
         _init_local_spark()
 
 
 def _init_local_spark():
     # context = SparkContext(conf=conf)
-    for folder in [SPARK_WAREHOUSE_ROOT]:
+    for folder in [SPARK_WAREHOUSE_DIR]:
         io.create_folder(folder)
     conf = SparkConf()
     hadoop_conf = _get_hadoop_conf()
@@ -647,33 +662,43 @@ def create_calendar_table(table_name, start_date, end_date):
     "starting spark server with args:"
     " dockerized={dockerized}, with_jupyter={with_jupyter}"
 )
-def start_server(dockerized: bool = None, with_jupyter: bool = True):
+def start_server(
+    dockerized: bool = None,
+    with_jupyter: bool = True,
+    daemon: bool = None
+):
     if dockerized is None:
         dockerized = (
             False
             if any(["SPARK_HOME" in os.environ, "HADOOP_CONF_DIR" in os.environ])
             else True
         )
+    if daemon is None:
+        daemon = dockerized
     if dockerized:
         container = _init_spark_container(with_jupyter=with_jupyter)
-        with logged_block("hosting spark container"):
-            while True:
-                time.sleep(30)
+        if daemon:
+            logging.info("Now serving spark requests via docker.")
+        else:
+            with logged_block("hosting spark container"):
+                while True:
+                    time.sleep(30)
     else:
-        _init_spark(dockerized=dockerized, with_jupyter=with_jupyter)
+        _init_spark(dockerized=False, with_jupyter=with_jupyter, daemon=daemon)
         logging.info(
             "Spark server started. "
             "Monitor via http://localhost:4040 or http://127.0.0.1:4040"
         )
-        if with_jupyter:
-            start_jupyter()
-        else:
-            logging.info("Skipping Jupyter notebooks server launch...")
-        with logged_block("serving spark requests"):
-            # NOTE: When run containerized, the above message triggers
-            #       the host to stop echoing logs
-            while True:
-                time.sleep(30)
+        # if with_jupyter:
+        #     start_jupyter()
+        # else:
+        #     logging.info("Skipping Jupyter notebooks server launch...")
+        if not daemon:
+            with logged_block(_SERVING_SPARK_REQUESTS):
+                # NOTE: When run containerized, the above message triggers
+                #       the host to stop echoing logs
+                while True:
+                    time.sleep(30)
 
 
 def main():

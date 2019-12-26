@@ -1,4 +1,5 @@
 # Files
+Dockerfile
 .Dockerignore
 .gitignore
 .nbserver-log.txt

@@ -238,6 +238,8 @@ def run_command(
     daemon=False,
     hide=False,
     cwd=None,
+    wait_test=None,
+    wait_max=None,
 ):
     """ Run a CLI command and return a tuple: (return_code, output_text) """
     loglines = []
@@ -255,13 +257,28 @@ def run_command(
         shell=shell,
         cwd=cwd,
     )
+    start_time = time.time()
     if log_file_path:
         logfile = open(log_file_path, "w", encoding="utf-8")
     else:
         logfile = None
     line = proc.stdout.readline()
     flush_all_output()
-    while not daemon and ((proc.poll() is None) or line):
+    while ((proc.poll() is None) or line):
+        if daemon:
+            if wait_max is None and wait_test is None:
+                logging.info("Daemon process is launched. Returning...")
+                break
+            if callable(wait_test) and wait_test(line):
+                logging.info(f"Returning. Wait test passed: {line}")
+                break
+            if wait_max and time.time() >= start_time + wait_max:
+                logging.info(f"Returning. Wait test passed: {line}")
+                if callable(wait_test):
+                    return_code = 1
+                else:
+                    return_code = 0
+                break
         if line:
             line = line.rstrip()
             loglines.append(line)
