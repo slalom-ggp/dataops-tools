@@ -15,6 +15,7 @@ runs:
     - --push_core=${{ inputs.pushCore }}
     - --with_login=True
     - --addl_args=${{ inputs.additionalArgs }}
+    - --ignore_caches=${{ inputs.ignoreCaches }}
   env:
     DOCKER_USERNAME: ${{ inputs.dockerUser }}
     DOCKER_PASSWORD: ${{ inputs.dockerPassword }}
@@ -26,14 +27,18 @@ inputs:
   tagAs:
     description: "The name of the new image name and tag (or a comma-separated list of the same)"
     required: true
+  ignoreCaches:
+    description: "Boolean (0 or 1) specifying whether or not to ignore existing caches (e.g. for security patching)"
+    required: false
+    default: "0"
   pushFinal:
     description: "Boolean (0 or 1) specifying whether or not to push the final image"
     required: false
-    default: 1
+    default: "1"
   pushCore:
     description: "Boolean (0 or 1) specifying whether or not to push the core image"
     required: false
-    default: 1
+    default: "1"
   dockerUser:
     description: "Docker user for login"
     required: false

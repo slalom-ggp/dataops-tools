@@ -86,6 +86,7 @@ def smart_build(
     push_final=False,
     with_login=False,
     addl_args=None,
+    ignore_caches=False,
 ):
     """
     Builds the dockerfile if needed but pulls it from the remote if possible.
@@ -95,27 +96,28 @@ def smart_build(
     tag_as = _to_list(tag_as)
     result = smart_split(dockerfile_path, tag_as, addl_args=addl_args)
     image_core, dockerfile_path_core, image_derived, dockerfile_path_derived = result
-    if dockerfile_path_derived is None and exists_remotely(image_core):
-        logging.info(
-            "Image with matching hash already exists "
-            "and no host files are referenced in Dockerfile."
-            f"Attempting to retag existing image '{image_core}' as '{tag_as}'..."
-        )
-        return remote_retag(
-            image_name=image_core.split(":")[0],
-            existing_tag=image_core.split(":")[1],
-            tag_as=tag_as,
-        )
-    pull(image_core, skip_if_exists=True, silent=True)
-    if not exists_locally(image_core):
+    if not ignore_caches:
+        if dockerfile_path_derived is None and exists_remotely(image_core):
+            logging.info(
+                "Image with matching hash already exists "
+                "and no host files are referenced in Dockerfile."
+                f"Attempting to retag existing image '{image_core}' as '{tag_as}'..."
+            )
+            return remote_retag(
+                image_name=image_core.split(":")[0],
+                existing_tag=image_core.split(":")[1],
+                tag_as=tag_as,
+            )
+        pull(image_core, skip_if_exists=True, silent=True)
+    if ignore_caches or not exists_locally(image_core):
         with logged_block(f"building interim (core) image as '{image_core}'"):
             build(dockerfile_path_core, image_core, addl_args=addl_args)
     if push_core:
-        if exists_remotely(image_core):
-            logging.info(f"Already exists. Skipping push of image '{image_derived}'")
-        else:
+        if ignore_caches or not exists_remotely(image_core):
             with logged_block(f"pushing interim (core) image '{image_derived}'"):
                 push(image_core)
+        else:
+            logging.info(f"Already exists. Skipping push of image '{image_derived}'")
     with logged_block(f"building '{dockerfile_path_derived}' as '{image_derived}'"):
         if dockerfile_path_derived:
             build(dockerfile_path_derived, image_derived, addl_args=addl_args)
