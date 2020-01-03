@@ -3,6 +3,8 @@ ARG source_image=slalomggp/spark:latest-dev
 
 FROM ${source_image}
 
+ARG dbt_spark_source=git+https://github.com/fishtown-analytics/dbt-spark@master
+
 # Set version filters, e.g. '>=0.1.0', '>=1.0,<=2.0'
 # Optionally, use the text 'skip' to skip or '' to use latest version
 ARG dbt_version_filter=''
@@ -54,7 +56,7 @@ RUN $DBT init sample-dbt-project && \
 ENV DBTSPARKENV /venv/dbt-spark
 ENV DBTSPARK /venv/dbt-spark/bin/dbt
 RUN python3 -m venv $DBTSPARKENV && \
-    $DBTSPARKENV/bin/pip3 install pyhive[hive] dbt-spark && \
+    $DBTSPARKENV/bin/pip3 install ${dbt_spark_source} && \
     $DBTSPARK --version
 RUN $DBTSPARK init sample-dbtspark-project && \
     cd sample-dbtspark-project && \
