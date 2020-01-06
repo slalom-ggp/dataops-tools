@@ -38,7 +38,7 @@ if [[ -z "$CMD" ]]; then
     CMD=$DEFAULT_CMD
 elif [[ "$1" == "dbt-spark" ]]; then
     shift;
-    CMD="$DBTSPARK $@";
+    CMD="dbt-spark $@";
     echo "Parsed DBT-Spark command: $CMD";
     start_mysql;
     start_spark;

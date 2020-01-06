@@ -29,48 +29,55 @@ RUN apt-get update && apt-get install -y -q \
     python3-venv
 
 ENV MELTANOENV /venv/meltano
-ENV MELTANO /venv/meltano/bin/meltano
 RUN if [ "$meltano_version_filter" = "skip" ]; then exit 0; fi && \
     python -m venv $MELTANOENV && \
     $MELTANOENV/bin/pip3 install "meltano$meltano_version_filter" && \
-    $MELTANO --version
+    ln -s $MELTANOENV/bin/meltano /usr/bin/meltano && \
+    meltano --version
 RUN if [ "$meltano_version_filter" = "skip" ]; then exit 0; fi && \
-    $MELTANO --version && \
-    $MELTANO init sample-meltano-project && \
+    meltano --version && \
+    meltano init sample-meltano-project && \
     cd sample-meltano-project && \
-    $MELTANO upgrade && \
-    $MELTANO discover all && \
-    $MELTANO --version
+    meltano upgrade && \
+    meltano discover all && \
+    meltano --version
 
-# Configure DBT
+# Install DBT
 ENV DBTENV /venv/dbt
-ENV DBT /venv/dbt/bin/dbt
 RUN python3 -m venv $DBTENV && \
     $DBTENV/bin/pip3 install "dbt$dbt_version_filter" && \
-    $DBT --version
-RUN $DBT init sample-dbt-project && \
+    ln -s $DBTENV/bin/dbt /usr/bin/dbt && \
+    dbt --version
+RUN dbt init sample-dbt-project && \
     cd sample-dbt-project && \
-    $DBT --version
+    dbt --version
 
-# Configure dbt-spark
+# Install dbt-spark
 ENV DBTSPARKENV /venv/dbt-spark
-ENV DBTSPARK /venv/dbt-spark/bin/dbt
 RUN python3 -m venv $DBTSPARKENV && \
     $DBTSPARKENV/bin/pip3 install ${dbt_spark_source} && \
-    $DBTSPARK --version
-RUN $DBTSPARK init sample-dbtspark-project && \
+    ln -s $DBTSPARKENV/bin/dbt /usr/bin/dbt-spark && \
+    dbt-spark --version
+RUN dbt-spark init sample-dbtspark-project && \
     cd sample-dbtspark-project && \
-    $DBTSPARK --version
+    dbt-spark --version
 
-# Configure pipelinewise
+# Install pipelinewise
 ENV PIPELINEWISE_HOME /venv/pipelinewise
 ENV PIPELINEWISEENV /venv/pipelinewise/.virtualenvs/pipelinewise
-ENV PIPELINEWISE $PIPELINEWISEENV/bin/pipelinewise
 RUN cd /venv && \
     git clone https://github.com/transferwise/pipelinewise.git && \
-    cd pipelinewise && ./install.sh --acceptlicenses
-RUN $PIPELINEWISE init --dir sample_pipelinewise_project --name sample_pipelinewise_project && \
-    $PIPELINEWISE import --dir sample_pipelinewise_project
+    cd pipelinewise && ./install.sh --acceptlicenses && \
+    ln -s $PIPELINEWISEENV/bin/pipelinewise /usr/bin/pipelinewise && \
+    pipelinewise --version
+RUN pipelinewise init --dir sample_pipelinewise_project --name sample_pipelinewise_project && \
+    pipelinewise import --dir sample_pipelinewise_project
+
+# Install tap-salesforce
+RUN python3 -m venv /venv/tap-salesforce && \
+    /venv/tap-salesforce/bin/pip3 install git+https://gitlab.com/meltano/tap-salesforce.git && \
+    ln -s /venv/tap-salesforce/bin/tap-salesforce /usr/bin/tap-salesforce && \
+    tap-salesforce --help
 
 # Capture command history, allows recall if used with `-v ./.devcontainer/.bashhist:/root/.bash_history`
 RUN mkdir -p /root/.bash_history && \
