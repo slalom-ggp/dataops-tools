@@ -25,7 +25,7 @@ def _get_taps_dir():
 
 
 def _get_plan_file(tap_name):
-    return os.path.join(_get_taps_dir(), f"{tap_name}-catalog-plan.yml")
+    return os.path.join(_get_taps_dir(), f"data-plan-{tap_name}.yml")
 
 
 def _get_select_file():
