@@ -75,15 +75,15 @@ def install(*args, infra_dir="./infra", deploy=False, git_ref="master"):
 @logged("initializing terraform project at '{infra_dir}'")
 def init(infra_dir: str = "./infra/"):
     infra_dir = os.path.realpath(infra_dir)
-    os.chdir(infra_dir)
-    jobs.run_command("terraform init")
+    jobs.run_command("terraform init", working_dir=infra_dir)
 
 
 @logged("applying terraform changes")
 def apply(infra_dir: str = "./infra/", save_output: bool = False, prompt: bool = False):
     infra_dir = os.path.realpath(infra_dir)
-    os.chdir(infra_dir)
-    jobs.run_command(f"terraform apply {'' if prompt else '-auto-approve'}")
+    jobs.run_command(
+        f"terraform apply {'' if prompt else '-auto-approve'}", working_dir=infra_dir
+    )
     if save_output:
         update_var_outputs(infra_dir=infra_dir)
 

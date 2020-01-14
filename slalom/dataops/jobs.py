@@ -231,6 +231,7 @@ def _grep(full_text, match_with, insensitive=True, fn=any):
 @logged("running command: {'(hidden)' if hide else cmd}")
 def run_command(
     cmd: str,
+    working_dir=None,
     echo=True,
     raise_error=True,
     log_file_path: str = None,
@@ -243,6 +244,9 @@ def run_command(
 ):
     """ Run a CLI command and return a tuple: (return_code, output_text) """
     loglines = []
+    if working_dir:
+        prev_working_dir = os.getcwd()
+        os.chdir(working_dir)
     if isinstance(cmd, list):
         pass  # cmd = " ".join(cmd)
     elif platform.system() == "Windows":
@@ -258,13 +262,15 @@ def run_command(
         cwd=cwd,
     )
     start_time = time.time()
+    if working_dir:
+        os.chdir(prev_working_dir)
     if log_file_path:
         logfile = open(log_file_path, "w", encoding="utf-8")
     else:
         logfile = None
     line = proc.stdout.readline()
     flush_all_output()
-    while ((proc.poll() is None) or line):
+    while (proc.poll() is None) or line:
         if daemon:
             if wait_max is None and wait_test is None:
                 logging.info("Daemon process is launched. Returning...")
@@ -299,7 +305,11 @@ def run_command(
         raise RuntimeError(f"Command failed: {cmd}\n\n")
     else:
         return_code = proc.returncode
-        if return_code != 0 and raise_error and ((daemon == False) or (return_code is not None)):
+        if (
+            return_code != 0
+            and raise_error
+            and ((daemon == False) or (return_code is not None))
+        ):
             err_msg = f"Command failed (exit code {return_code}): {cmd}"
             if not echo:
                 print_str = output_text
