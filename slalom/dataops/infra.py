@@ -80,10 +80,10 @@ def init(infra_dir: str = "./infra/"):
 
 
 @logged("applying terraform changes")
-def apply(infra_dir: str = "./infra/", save_output: bool = False):
+def apply(infra_dir: str = "./infra/", save_output: bool = False, prompt: bool = False):
     infra_dir = os.path.realpath(infra_dir)
     os.chdir(infra_dir)
-    jobs.run_command("terraform apply")
+    jobs.run_command("terraform apply {'' if prompt else '-auto-approve'}")
     if save_output:
         update_var_outputs(infra_dir=infra_dir)
 
@@ -91,7 +91,7 @@ def apply(infra_dir: str = "./infra/", save_output: bool = False):
 def init_and_apply(infra_dir: str = "./infra/", save_output: bool = False):
     infra_dir = os.path.realpath(infra_dir)
     init(infra_dir=infra_dir)
-    apply(infra_dir=infra_dir, save_output=save_output)
+    apply(infra_dir=infra_dir, save_output=save_output, prompt=False)
 
 
 def main():

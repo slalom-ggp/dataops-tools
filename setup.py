@@ -38,8 +38,9 @@ setup(
             # Register CLI commands:
             "s-docker = slalom.dataops.dockerutils:main",
             "s-infra = slalom.dataops.infra:main",
-            "s-spark = slalom.dataops.sparkutils:main",
             "s-io = slalom.dataops.io:main",
+            "s-spark = slalom.dataops.sparkutils:main",
+            "s-tap = slalom.dataops.taputils:main",
         ]
     },
     include_package_data=True,
@@ -51,14 +52,11 @@ setup(
         "matplotlib",
         "psutil",
         "pyspark",
+        "pyyaml",
         "tqdm",
         "xmlrunner",
     ],
-    extras_require={
-        "Azure": ["azure"],
-        "AWS": ["awscli", "s3fs"],
-        "Pandas": ["pandas"],
-    },
+    extras_require={"Azure": ["azure"], "AWS": ["awscli", "s3fs"], "Pandas": ["pandas"]},
     classifiers=[
         "Development Status :: 3 - Alpha",  # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package
         "Intended Audience :: Developers",

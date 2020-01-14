@@ -351,6 +351,8 @@ def download_s3_file(s3_path, local_path):
 
 
 def get_text_file_contents(filepath, encoding="utf-8"):
+    if not filepath:
+        raise ValueError(f"Invalid filepath argument: {filepath}")
     filepath = cleanup_filepath(filepath)
     with open(filepath, "r", encoding=encoding) as f:
         return f.read()
