@@ -67,11 +67,12 @@ def install(*args, infra_dir="./infra", deploy=False, git_ref="master"):
             )
     lf = "\n"
     logging.info(f"List of installed modules:\n{lf.join(io.ls(infra_dir))}")
+    init(infra_dir=infra_dir)
     if deploy:
-        init_and_apply(infra_dir=infra_dir)
+        apply(infra_dir=infra_dir)
 
 
-@logged("initializing terraform")
+@logged("initializing terraform project at '{infra_dir}'")
 def init(infra_dir: str = "./infra/"):
     infra_dir = os.path.realpath(infra_dir)
     os.chdir(infra_dir)
