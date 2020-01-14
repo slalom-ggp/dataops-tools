@@ -83,7 +83,7 @@ def init(infra_dir: str = "./infra/"):
 def apply(infra_dir: str = "./infra/", save_output: bool = False, prompt: bool = False):
     infra_dir = os.path.realpath(infra_dir)
     os.chdir(infra_dir)
-    jobs.run_command("terraform apply {'' if prompt else '-auto-approve'}")
+    jobs.run_command(f"terraform apply {'' if prompt else '-auto-approve'}")
     if save_output:
         update_var_outputs(infra_dir=infra_dir)
 
