@@ -38,7 +38,7 @@ def update_var_outputs(infra_dir, output_vars=[]):
     )
 
 
-def install(*args, infra_dir: str = "./infra/", deploy: bool = False):
+def install(*args, infra_dir="./infra", deploy=False, git_ref="master"):
     """
     Usage example: 
     ```
@@ -61,9 +61,8 @@ def install(*args, infra_dir: str = "./infra/", deploy: bool = False):
                 raise ValueError(
                     f"Expected infra_type to be one of: 'catalog', 'samples'. Received type: {infra_type}"
                 )
-            branch = "feat/terraform-prereqs"
             io.download_folder(
-                remote_folder=f"git://github.com/slalom-ggp/dataops-infra#{branch}//{infra_type}/{infra_name}",
+                remote_folder=f"git://github.com/slalom-ggp/dataops-infra#{git_ref}//{infra_type}/{infra_name}",
                 local_folder=infra_dir,
             )
     lf = "\n"
