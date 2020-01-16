@@ -1,4 +1,4 @@
-name: Automated Publish (Release)
+name: Docker Publish (latest)
 
 on:
   push:

@@ -18,8 +18,8 @@ if not detected_version and os.path.exists(version_filepath):
             )
 if not detected_version:
     raise RuntimeError("Error. Could not detect version.")
-if os.environ.get("BRANCH_NAME", "unknown") != "master":
-    detected_version = f"{detected_version}.dev"
+if os.environ.get("BRANCH_NAME", "unknown") not in ["master", "refs/heads/master"]:
+    detected_version = f"{detected_version}.dev0"
 
 detected_version = detected_version.lstrip("v")
 print(f"Detected version: {detected_version}")
