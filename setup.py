@@ -11,11 +11,15 @@ if "VERSION" in os.environ:
         detected_version = detected_version.split("/")[-1]
 if not detected_version and os.path.exists(version_filepath):
     detected_version = Path(version_filepath).read_text()
-    if len(detected_version.split(".")) <= 2:
+    if len(detected_version.split(".")) <= 3:
         if "BUILD_NUMBER" in os.environ:
-            detected_version = f"{detected_version}.{os.environ['BUILD_NUMBER']}"
+            detected_version = (
+                f"{detected_version}.{os.environ['BUILD_NUMBER']}"
+            )
 if not detected_version:
     raise RuntimeError("Error. Could not detect version.")
+if os.environ.get("BRANCH_NAME", "unknown") != "master":
+    detected_version = f"{detected_version}.dev"
 
 detected_version = detected_version.lstrip("v")
 print(f"Detected version: {detected_version}")

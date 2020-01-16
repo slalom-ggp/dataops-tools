@@ -1,4 +1,6 @@
-# dataops-tools ![CI/CD Badge (master)](https://github.com/slalom-ggp/dataops-tools/workflows/CI/CD%20Pipeline/badge.svg) ![PyPi Badge (master)](https://github.com/slalom-ggp/dataops-tools/workflows/Publish%20to%20PyPi/badge.svg)
+# dataops-tools
+
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/slalom.dataops.svg)](https://pypi.org/project/slalom.dataops/) [![PyPI version](https://badge.fury.io/py/slalom.dataops.svg)](https://badge.fury.io/py/slalom.dataops) [![CI/CD Badge (master)](https://github.com/slalom-ggp/dataops-tools/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/slalom-ggp/dataops-tools/actions?query=workflow%3A%22Automated+Build+and+Test%22) [![PyPi Badge (master)](https://github.com/slalom-ggp/dataops-tools/workflows/Automated%20Publish%20(Release)/badge.svg)](https://github.com/slalom-ggp/dataops-tools/actions?query=workflow%3A%22Automated+Publish+%28Release%29%22)
 
 Reusable tools, utilities, and containers that accelerate data processing and DevOps.
 

@@ -1,41 +1,11 @@
 name: Automated Publish (Release)
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - master
 
 jobs:
-  pypi_publish:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Clone git repo
-        uses: actions/checkout@v1
-      - name: Set up Python 3.7
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: Push to PyPi (https://pypi.org/project/slalom.dataops/)
-        env:
-          VERSION: ${{ github.ref }}
-          PYPI_USER: ${{ secrets.PYPI_USER }}
-          PYPI_PASS: ${{ secrets.PYPI_SECRET }}
-        run: |
-          echo -e "Installing twine...\n\n"
-          pip install twine
-          echo -e "\nCreating setup package...\n\n"
-          python setup.py sdist
-          echo -e "\nPublishing to version ref '$VERSION'...\n\n"
-          twine upload -u $PYPI_USER -p $PYPI_PASS dist/*
-      - name: Test install (pip install slalom.dataops)
-        run: |
-          pip install slalom.dataops
-      - name: Test uninstall (pip uninstall slalom.dataops)
-        run: |
-          pip uninstall -y slalom.dataops
-      - name: Test full install (pip install w/ extras)
-        run: |
-          pip install slalom.dataops[Azure,AWS,Docker,Pandas,Spark]
-
   docker_dataops_publish:
     runs-on: ubuntu-latest
     steps:
