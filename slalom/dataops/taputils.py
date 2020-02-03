@@ -24,12 +24,12 @@ def _get_taps_dir():
     return f"{ROOT_DIR}/data/taps"
 
 
-def _get_plan_file(tap_name):
-    return os.path.join(_get_taps_dir(), f"data-plan-{tap_name}.yml")
+def _get_plan_file(tap_name, tap_dir=None):
+    return os.path.join(tap_dir or _get_taps_dir(), f"data-plan-{tap_name}.yml")
 
 
-def _get_select_file():
-    return os.path.join(_get_taps_dir(), f"data.select")
+def _get_select_file(tap_dir=None):
+    return os.path.join(tap_dir or _get_taps_dir(), f"data.select")
 
 
 def _get_config_file(plugin_name):
@@ -208,7 +208,7 @@ def _check_table_rule(match_text: str, rule_text: str):
     return match_result
 
 
-def plan(tap_name, select_file=None, config_file=None, catalog_dir=None, rescan=None):
+def plan(tap_name, tap_dir=None, config_file=None, catalog_dir=None, rescan=None):
     """
     Perform all actions necessary to prepare (plan) for a tap execution:
      1. Scan (discover) the source system metadata (if catalog missing or `rescan=True`)
@@ -217,14 +217,15 @@ def plan(tap_name, select_file=None, config_file=None, catalog_dir=None, rescan=
      2. Create a new `catalog-selected.json` file which applies the plan file and which 
         can be used by the tap to run data extractions.
     """
+    tap_dir = tap_dir or _get_taps_dir()
     config_file = config_file or _get_config_file(f"tap-{tap_name}")
     catalog_dir = catalog_dir or _get_catalog_output_dir(tap_name)
     catalog_file = f"{catalog_dir}/{tap_name}-catalog-raw.json"
     selected_catalog_file = f"{catalog_dir}/{tap_name}-catalog-selected.json"
-    plan_file = _get_plan_file(tap_name)
-    if rescan or not io.file_exists(catalog_file):
+    plan_file = _get_plan_file(tap_name, tap_dir)
+    if rescan or not io.file_exists(catalog_file) or io.get_text_file_contents(catalog_file).strip() == "":
         discover(tap_name, config_file, catalog_dir)
-    select_file = select_file or _get_select_file()
+    select_file = _get_select_file(tap_dir)
     select_rules = [
         line.split("#")[0].rstrip()
         for line in io.get_text_file_contents(select_file).splitlines()
@@ -276,23 +277,27 @@ def plan(tap_name, select_file=None, config_file=None, catalog_dir=None, rescan=
 def sync(
     tap_name,
     table_name=None,
-    select_file=None,
+    tap_dir=None,
     config_file=None,
     catalog_dir=None,
     target_name="csv",
     target_config_file=None,
+    rescan=False,
 ):
     """ Run a tap sync. If table_name is ommitted, all sources will be extracted. """
+    tap_dir = tap_dir or _get_taps_dir()
+    select_file = _get_select_file(tap_dir)
     config_file = config_file or _get_config_file(f"tap-{tap_name}")
     target_config_file = target_config_file or _get_config_file(f"target-{target_name}")
     catalog_dir = catalog_dir or _get_catalog_output_dir(tap_name)
     full_catalog_file = f"{catalog_dir}/{tap_name}-catalog-selected.json"
-    if select_file or not io.file_exists(full_catalog_file):
+    if rescan or select_file or not io.file_exists(full_catalog_file):
         plan(
             tap_name,
-            select_file=select_file,
+            tap_dir=tap_dir,
             config_file=config_file,
             catalog_dir=catalog_dir,
+            rescan=rescan,
         )
     if table_name:
         catalog_file = f"{catalog_dir}/{tap_name}-{table_name}-catalog.json"
