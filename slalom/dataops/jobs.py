@@ -223,9 +223,11 @@ def _grep(full_text, match_with, insensitive=True, fn=any):
     if isinstance(match_with, str):
         match_with = [match_with]
     if insensitive:
-        match_with = [m.lower() for m in match_with]
-        lines = [l.lower() for l in lines]
-    return "\n".join([l for l in lines if fn([m in l for m in match_with])])
+        return "\n".join(
+            [l for l in lines if fn([m.lower() in l.lower() for m in match_with])]
+        )
+    else:
+        return "\n".join([l for l in lines if fn([m in l for m in match_with])])
 
 
 @logged("running command: {'(hidden)' if hide else cmd}")
@@ -279,7 +281,10 @@ def run_command(
                 logging.info(f"Returning. Wait test passed: {line}")
                 break
             if wait_max and time.time() >= start_time + wait_max:
-                logging.info(f"Returning. Wait test passed: {line}")
+                logging.info(
+                    f"{line}\nMax timeout expired (wait_max={wait_max})."
+                    f" Returning..."
+                )
                 if callable(wait_test):
                     return_code = 1
                 else:

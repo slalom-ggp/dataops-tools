@@ -1,9 +1,12 @@
 """ slalom.dataops.sparkutils module """
 
 import datetime
+import importlib.util
 import time
 import os
 import sys
+
+from pathlib import Path
 
 import docker
 import fire
@@ -46,6 +49,7 @@ except Exception as ex:
     pd = None
     logging.warning(f"Could not load pandas library. Try 'pip install pandas'. {ex}")
 
+ENV_VAR_SPARK_UDF_MODULE = "SPARK_UDF_MODULE"
 
 _SERVING_SPARK_REQUESTS = "serving spark requests"
 ENABLE_SQL_JDBC = bool(os.environ.get("ENABLE_SQL_JDBC", False))
@@ -127,43 +131,6 @@ def _add_mysql_metastore_config(hadoop_conf):
     return hadoop_conf
 
 
-def _get_aws_creds(update_env_vars=True):
-    """ Load AWS creds. Returns a 2-item duple or None. """
-
-    def _parse_key_config(key_name, file_text):
-        for line in file_text.splitlines():
-            if key_name.lower() in line.lower() and "=" in line:
-                return line.split("=")[1].strip()
-        raise RuntimeError(f"Could not file {key_name} in file text:\n{file_text}")
-
-    key, secret = None, None
-    if "AWS_ACCESS_KEY_ID" in os.environ and "AWS_SECRET_ACCESS_KEY" in os.environ:
-        logging.info("Found env vars: 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_ACCESS_KEY'")
-        key = os.environ["AWS_ACCESS_KEY_ID"]
-        secret = os.environ["AWS_SECRET_ACCESS_KEY"]
-    else:
-        logging.info(
-            f"Environment variables: "
-            f"[AWS_ACCESS_KEY_ID: {'AWS_ACCESS_KEY_ID' in os.environ},"
-            f" AWS_SECRET_ACCESS_KEY: {'AWS_SECRET_ACCESS_KEY' in os.environ}]"
-        )
-        default_creds_path = os.path.expanduser("~/.aws/credentials")
-        if io.file_exists(default_creds_path):
-            logging.info(f"Found AWS credentials file: {default_creds_path}")
-            cred_file = io.get_text_file_contents(default_creds_path)
-        else:
-            raise RuntimeError(
-                f"Could not find AWS creds in file or env variables. "
-                f"Checked: '{default_creds_path}'."
-            )
-        key = _parse_key_config("AWS_ACCESS_KEY_ID", cred_file)
-        secret = _parse_key_config("AWS_SECRET_ACCESS_KEY", cred_file)
-        if update_env_vars:
-            os.environ["AWS_ACCESS_KEY_ID"] = key
-            os.environ["AWS_SECRET_ACCESS_KEY"] = secret
-    return key, secret
-
-
 def _add_aws_creds_config(hadoop_conf):
     """ Returns a new hadoop_conf dict with added metastore params """
     hadoop_conf.update(
@@ -182,7 +149,7 @@ def _add_aws_creds_config(hadoop_conf):
         + " -Djava.net.preferIPv4Stack=true -Dcom.amazonaws.services.s3.enableV4=true"
     )
     try:
-        key, secret = _get_aws_creds()
+        key, secret = io.load_aws_creds()
         logging.info(
             f"Successfully loaded AWS creds for access key: ****************{key[-4:]}"
         )
@@ -224,6 +191,7 @@ def _get_hadoop_conf():
         hadoop_conf = _add_derby_metastore_config(hadoop_conf)
     return hadoop_conf
 
+# GLOBALS
 
 spark = None
 sc = None
@@ -231,7 +199,7 @@ thrift = None
 _spark_container = None
 
 
-@logged("starting spark container '{spark_image}' with args: with_jupyter={with_jupyter}")
+@logged("starting Spark container '{spark_image}' with args: with_jupyter={with_jupyter}")
 def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
     global _spark_container
 
@@ -246,7 +214,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
         "10000": "10000",  # Thrift JDBC port for SQL queries
         "18080": "18080",  # History Server Web UI
     }
-    _get_aws_creds(update_env_vars=True)
+    io.load_aws_creds(update_env_vars=True)
     env = [
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -263,13 +231,13 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
     try:
         dockerutils.pull(spark_image)
     except Exception as ex:
-        logging.warning(f"Could not pull latest spark image '{spark_image}'. {ex}")
+        logging.warning(f"Could not pull latest Spark image '{spark_image}'. {ex}")
     try:
         old_container = docker_client.containers.get("spark_server")
         if old_container:
             with logged_block("terminating previous 'spark_server' docker container"):
                 old_container.stop()
-                logging.info("Waiting for cleanup of old spark container...")
+                logging.info("Waiting for cleanup of old Spark container...")
                 time.sleep(2)
     except Exception as _:
         pass
@@ -322,10 +290,10 @@ def _destroy_spark_container():
 
 
 @logged(
-    "initializing spark with args: dockerized={dockerized}, with_jupyter={with_jupyter}"
+    "initializing Spark with args: dockerized={dockerized}, with_jupyter={with_jupyter}"
 )
 def _init_spark(dockerized=False, with_jupyter=False, daemon=False):
-    """ Return an initialized spark object """
+    """Return an initialized spark object"""
     global spark, sc, thrift
 
     if dockerized:
@@ -339,7 +307,7 @@ def _init_spark(dockerized=False, with_jupyter=False, daemon=False):
     elif daemon:
         cmd = f"{sys.executable} -m slalom.dataops.sparkutils start_server"
         wait_test = lambda line: _SERVING_SPARK_REQUESTS in line
-        wait_max = 60  # Wait at max for 60 seconds
+        wait_max = 120  # Max wait in seconds
         if with_jupyter:
             cmd = f"{cmd} --with_jupyter"
         jobs.run_command(cmd, daemon=True, wait_test=wait_test, wait_max=wait_max)
@@ -348,6 +316,9 @@ def _init_spark(dockerized=False, with_jupyter=False, daemon=False):
 
 
 def _init_local_spark():
+    """Return an initialized local spark object"""
+    global spark, sc, thrift
+
     # context = SparkContext(conf=conf)
     for folder in [SPARK_WAREHOUSE_DIR]:
         io.create_folder(folder)
@@ -372,18 +343,68 @@ def _init_local_spark():
         sc.setSystemProperty("com.amazonaws.services.s3.enableV4", "true")
     if not ENABLE_SQL_JDBC:
         logging.info(f"Skipping Thrift server launch (ENABLE_SQL_JDBC={ENABLE_SQL_JDBC})")
+        thrift = None
     else:
         with logged_block("starting Thrift server"):
             java_import(sc._gateway.jvm, "")
             spark_hive = sc._gateway.jvm.org.apache.spark.sql.hive
             thrift_class = spark_hive.thriftserver.HiveThriftServer2
             thrift = thrift_class.startWithContext(spark._jwrapped)
+        logging.info("Sleeping while waiting for Thrift Server...")
+        time.sleep(1)
     spark.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
     _print_conf_debug(sc)
+    if ENV_VAR_SPARK_UDF_MODULE in os.environ:
+        add_udf_module(os.environ.get(ENV_VAR_SPARK_UDF_MODULE))
+    else:
+        logging.info("Skipping loading UDFs (env variable not set)")
     for jar_path in SPARK_EXTRA_AWS_JARS:
         sc.addPyFile(jar_path)
-    else:
-        thrift = None
+
+
+@logged("importing from dynamic python file '{absolute_file_path}'")
+def path_import(absolute_file_path):
+    '''implementation taken from https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly'''
+    module_name = os.path.basename(absolute_file_path)
+    module_name = ".".join(module_name.split(".")[:-1])  # removes .py suffix
+    spec = importlib.util.spec_from_file_location(module_name, absolute_file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@logged("loading UDFs from module directory '{module_dir}'")
+def add_udf_module(module_dir=None):
+    """
+    Add a package from module_dir (or zip file) and register any udfs within the package
+    The module must contain a '__init__.py' file and functions to be imported should be
+    annotated using the @udf() decorator.
+    # https://stackoverflow.com/questions/47558704/python-dynamic-import-methods-from-file
+    """
+    global sc
+    from inspect import getmembers, isfunction
+
+    # module_dir = module_dir or os.environ.get(ENV_VAR_SPARK_UDF_MODULE)
+    module_dir = os.path.realpath(module_dir)
+    # module_root = Path(module_dir).parent
+    # module_name = os.path.basename(module_dir)
+    # if module_root not in sys.path:
+    #     sys.path.append(module_root)
+    if not os.path.isdir(module_dir):
+        raise ValueError(f"Folder '{module_dir}' does not exist.")
+    for file in io.list_files(module_dir):
+        if file.endswith(".py"):
+            module = path_import(file)
+            for member in getmembers(module):
+                if isfunction(member[1]):
+                    logging.info(f"Found module function: {member}")
+                    func_name, func = member[0], member[1]
+                    if func_name[:1] != "_" and func_name != "udf":
+                        logging.info(f"Registering UDF '{func_name}':\n{func.__dict__}")
+                        spark.udf.register(func_name, func)
+                # else:
+                #     logging.info(f"Found module entity: {member}")
+    # sc.addPyFile(jar_path)
 
 
 @logged("starting Jupyter notebooks server")

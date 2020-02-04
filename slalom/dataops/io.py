@@ -477,6 +477,58 @@ def s3read_using(func, *args, **kwargs):
     return result
 
 
+def _get_aws_settings_from_file(filepath, profile="default"):
+    config = {}
+    profle_match = False
+    for line in get_text_file_contents(filepath).splitlines():
+        if line.startswith(f"[{profile}]"):
+            profile_match = True
+            continue
+        elif line.startswith("["):
+            profile_match = False
+            continue
+        if profile_match and line.rstrip():
+            line = line.split("#")[0].strip()
+            if "=" in line:
+                k, v = (s.strip() for s in line.split("="))
+                config[k.upper()] = v
+    return config
+
+
+def load_aws_creds(update_env_vars=True):
+    """ Load AWS creds. Returns a 2-item duple or None. """
+    key, secret = None, None
+    settings = {}
+    default_creds_file = os.environ.get(
+        "AWS_SHARED_CREDENTIALS_FILE", os.path.expanduser("~/.aws/credentials")
+    )
+    default_config_file = os.environ.get(
+        "AWS_CONFIG_FILE", os.path.expanduser("~/.aws/config")
+    )
+    if file_exists(default_creds_file):
+        logging.info(f"Parsing AWS credentials file '{default_creds_file}'...")
+        settings.update(
+            _get_aws_settings_from_file(default_creds_file)
+        )
+    if file_exists(default_config_file):
+        logging.info(f"Parsing AWS config file '{default_config_file}'...")
+        settings.update(
+            _get_aws_settings_from_file(default_config_file)
+        )
+    if "AWS_ACCESS_KEY_ID" in os.environ and "AWS_SECRET_ACCESS_KEY" in os.environ:
+        logging.info("Found env vars: 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_ACCESS_KEY'")
+        settings["AWS_ACCESS_KEY_ID"] = os.environ["AWS_ACCESS_KEY_ID"]
+        settings["AWS_SECRET_ACCESS_KEY"] = os.environ["AWS_SECRET_ACCESS_KEY"]
+    if "AWS_ACCESS_KEY_ID" not in settings or "AWS_SECRET_ACCESS_KEY" not in settings:
+        raise RuntimeError(f"Could not find AWS creds in file or env variables.")
+    key = settings["AWS_ACCESS_KEY_ID"]
+    secret = settings["AWS_SECRET_ACCESS_KEY"]
+    if update_env_vars:
+        os.environ["AWS_ACCESS_KEY_ID"] = key
+        os.environ["AWS_SECRET_ACCESS_KEY"] = secret
+    return key, secret
+
+
 def main():
     fire.Fire()
 

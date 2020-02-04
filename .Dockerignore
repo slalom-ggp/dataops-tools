@@ -19,3 +19,7 @@ requirements.local-dev.txt
 **/spark-warehouse/
 test-reports
 nb
+**/__pycache__
+dist
+build
+.secrets

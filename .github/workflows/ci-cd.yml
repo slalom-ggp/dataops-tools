@@ -137,7 +137,7 @@ jobs:
           dockerPassword: ${{ secrets.DOCKER_SECRET }}
           additionalArgs: >
             --build-arg source_image=python:3.7
-            --build-arg dbt_spark_source=git+https://github.com/aaronsteers/dbt-spark@aaronsteers-feat-pip-installs
+            --build-arg dbt_spark_source=git+https://github.com/fishtown-analytics/dbt-spark@master
           ignoreCaches: 0
 
   docker_dbt:
@@ -159,7 +159,7 @@ jobs:
           dockerPassword: ${{ secrets.DOCKER_SECRET }}
           additionalArgs: >
             --build-arg source_image=slalomggp/spark:commit-${{ github.sha }}
-            --build-arg dbt_spark_source=git+https://github.com/aaronsteers/dbt-spark@aaronsteers-feat-pip-installs
+            --build-arg dbt_spark_source=git+https://github.com/fishtown-analytics/dbt-spark@master
           ignoreCaches: 0
 
   docker_dataops:
