@@ -19,5 +19,5 @@
   "python.linting.pylamaArgs": [
     "--max-line-length",
     "90"
-  ],
+  ]
 }

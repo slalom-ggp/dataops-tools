@@ -13,9 +13,7 @@ if not detected_version and os.path.exists(version_filepath):
     detected_version = Path(version_filepath).read_text()
     if len(detected_version.split(".")) <= 3:
         if "BUILD_NUMBER" in os.environ:
-            detected_version = (
-                f"{detected_version}.{os.environ['BUILD_NUMBER']}"
-            )
+            detected_version = f"{detected_version}.{os.environ['BUILD_NUMBER']}"
 if not detected_version:
     raise RuntimeError("Error. Could not detect version.")
 if os.environ.get("BRANCH_NAME", "unknown") not in ["master", "refs/heads/master"]:
@@ -53,14 +51,17 @@ setup(
         "fire",
         "joblib",
         "junit-xml",
-        "matplotlib",
         "psutil",
-        "pyspark",
         "pyyaml",
         "tqdm",
         "xmlrunner",
     ],
-    extras_require={"Azure": ["azure"], "AWS": ["awscli", "s3fs"], "Pandas": ["pandas"]},
+    extras_require={
+        "AWS": ["awscli", "s3fs"],
+        "Azure": ["azure"],
+        "Pandas": ["pandas"],
+        "Spark": ["pyspark"],
+    },
     classifiers=[
         "Development Status :: 3 - Alpha",  # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package
         "Intended Audience :: Developers",
