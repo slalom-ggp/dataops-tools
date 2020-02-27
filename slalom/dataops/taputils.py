@@ -15,13 +15,29 @@ from slalom.dataops import io
 logging = get_logger("slalom.dataops.taputils")
 
 # ROOT_DIR = "."
-ROOT_DIR = "/projects/my-project"
+_ROOT_DIR = "/projects/my-project"
 VENV_ROOT = "/venv"
 INSTALL_ROOT = "/usr/bin"
 
 
+def _get_root_dir():
+    return _ROOT_DIR
+
+
+def _get_secrets_dir():
+    return os.environ.get("TAP_SECRETS_DIR", f"{_get_root_dir()}/.secrets")
+
+
+def _get_scratch_dir():
+    return os.environ.get("TAP_SCRATCH_DIR", f"{_get_root_dir()}/.output")
+
+
 def _get_taps_dir():
-    return f"{ROOT_DIR}/data/taps"
+    return os.environ.get("TAP_CONFIG_DIR", f"{_get_root_dir()}/data/taps")
+
+
+def _get_catalog_output_dir(tap_name):
+    return f"{_get_scratch_dir()}/taps/{tap_name}-catalog"
 
 
 def _get_plan_file(tap_name, tap_dir=None):
@@ -35,14 +51,15 @@ def _get_select_file(tap_dir=None):
 def _get_config_file(plugin_name):
     """
     Returns a path to the configuration file which also contains secrets.
-     - If file does not exist at the default path, a new file will be created
+     - If file does not exist at the default secrets path, a new file will be created.
      - If any environment variables exist in the form of TAP_MYTAP_my_setting, a new file
     will be created which contains these settings.
      - If the default file exists and environment variables also exist, the temp file will
     contain the default file values along with the environment variable overrides.
     """
-    default_path = f"{ROOT_DIR}/.secrets/{plugin_name}-config.json"
-    tmp_path = f"{ROOT_DIR}/.secrets/tmp/{plugin_name}-config.json"
+    secrets_path = _get_secrets_dir()
+    default_path = f"{secrets_path}/{plugin_name}-config.json"
+    tmp_path = f"{secrets_path}/tmp/{plugin_name}-config.json"
     use_tmp_file = False
     if io.file_exists(default_path):
         conf_dict = json.loads(io.get_text_file_contents(default_path))
@@ -61,10 +78,6 @@ def _get_config_file(plugin_name):
         return tmp_path
     else:
         return default_path
-
-
-def _get_catalog_output_dir(tap_name):
-    return f"{ROOT_DIR}/.output/taps/{tap_name}-catalog"
 
 
 @logged(
@@ -208,13 +221,14 @@ def _check_table_rule(match_text: str, rule_text: str):
     return match_result
 
 
+@logged("Updating plan file for 'tap-{tap_name}'")
 def plan(tap_name, tap_dir=None, config_file=None, catalog_dir=None, rescan=None):
     """
     Perform all actions necessary to prepare (plan) for a tap execution:
      1. Scan (discover) the source system metadata (if catalog missing or `rescan=True`)
-     2. Apply filter rules from `select_file` and create human-readable `plan.yml` file to 
+     2. Apply filter rules from `select_file` and create human-readable `plan.yml` file to
         describe planned inclusions/exclusions.
-     2. Create a new `catalog-selected.json` file which applies the plan file and which 
+     2. Create a new `catalog-selected.json` file which applies the plan file and which
         can be used by the tap to run data extractions.
     """
     tap_dir = tap_dir or _get_taps_dir()
@@ -223,7 +237,13 @@ def plan(tap_name, tap_dir=None, config_file=None, catalog_dir=None, rescan=None
     catalog_file = f"{catalog_dir}/{tap_name}-catalog-raw.json"
     selected_catalog_file = f"{catalog_dir}/{tap_name}-catalog-selected.json"
     plan_file = _get_plan_file(tap_name, tap_dir)
-    if rescan or not io.file_exists(catalog_file) or io.get_text_file_contents(catalog_file).strip() == "":
+    if (
+        io.file_exists(catalog_file)
+        and io.get_text_file_contents(catalog_file).strip() == ""
+    ):
+        logging.info(f"Cleaning up empty catalog file: {catalog_file}")
+        io.delete_file(catalog_file)
+    if rescan or io.file_exists(catalog_file):
         discover(tap_name, config_file, catalog_dir)
     select_file = _get_select_file(tap_dir)
     select_rules = [
@@ -284,7 +304,7 @@ def sync(
     target_config_file=None,
     rescan=False,
 ):
-    """ Run a tap sync. If table_name is ommitted, all sources will be extracted. """
+    """ Run a tap sync. If table_name is omitted, all sources will be extracted. """
     tap_dir = tap_dir or _get_taps_dir()
     select_file = _get_select_file(tap_dir)
     config_file = config_file or _get_config_file(f"tap-{tap_name}")

@@ -4,7 +4,7 @@ runs:
   using: "docker"
   image: "docker://slalomggp/dataops:latest-dev"
   args:
-    - dockerutils
+    - s-docker
     - remote_retag
     - --image_name=${{ inputs.imageName }}
     - --existing_tag=${{ inputs.existingTag }}

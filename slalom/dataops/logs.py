@@ -282,8 +282,8 @@ class logged(object):
         log_fn=None,
         **addl_kwargs,
     ):
-        log_fn = log_fn or DEFAULT_LOGGER.info
         """ All arguments optional """
+        log_fn = log_fn or DEFAULT_LOGGER.info
         self.default_context = addl_kwargs.copy()  # start with addl. args
         self.default_context.update(locals())  # merge all constructor args
         self.buffer_lines = buffer_lines
@@ -377,4 +377,5 @@ class logged(object):
                 self.print_buffer()
             return result
 
+        wrapped_fn.__doc__ = fn.__doc__  # Use docstring from inner function.
         return wrapped_fn

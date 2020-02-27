@@ -1,70 +1,64 @@
-import os
-import tempfile
-from pathlib import Path
-import shutil
+import os as _os
+import tempfile as _tempfile
+from pathlib import Path as _Path
+import shutil as _shutil
 
-import fire
+import fire as _fire
 
-from slalom.dataops.logs import get_logger, logged, logged_block
-from slalom.dataops import jobs
+from slalom.dataops import logs as _logs
+from slalom.dataops import jobs as _jobs
 
-logging = get_logger("slalom.dataops")
+_LOGGER = _logs.get_logger("slalom.dataops")
 
 
-def warn_failed_import(library_name, install_hint):
-    logging.warning(
+def _warn_failed_import(library_name, install_hint):
+    _LOGGER.warning(
         f"Could not load '{library_name}' library. Some functionality may be disabled. "
         f"Please confirm '{library_name}' is installed or install via '{install_hint}'."
     )
 
 
+# try:
+#     import pandas as pd
+# except Exception as ex:
+#     pd = None
+#     _warn_failed_import("pandas", "pip install pandas")
 try:
-    import pandas as pd
+    import boto3 as _boto3
 except Exception as ex:
-    pd = None
-    warn_failed_import("pandas", "pip install pandas")
+    _boto3 = None
+    _warn_failed_import("boto3", "pip install boto3")
 try:
-    import boto3
+    import s3fs as _s3fs
 except Exception as ex:
-    boto3 = None
-    warn_failed_import("boto3", "pip install boto3")
-try:
-    import s3fs
-except Exception as ex:
-    s3fs = None
-    warn_failed_import("s3fs", "pip install s3fs")
+    _s3fs = None
+    _warn_failed_import("s3fs", "pip install s3fs")
 
 try:
-    from azure.datalake.store import core, lib, multithread
-    from azure.datalake.store.core import AzureDLFileSystem
-    from azure.common.client_factory import get_client_from_cli_profile
+    from azure.datalake import store as _adls
 except Exception as ex:
-    logging.warning(f"Azure libraries not loaded: {ex}")
+    _LOGGER.warning(f"Azure libraries not loaded: {ex}")
 try:
-    tenant = os.environ["AZURE_TENANT_ID"]
-    client_id = os.environ["AZURE_CLIENT_ID"]
-    client_secret = os.environ["AZURE_CLIENT_SECRET"]
-    RESOURCE = "https://datalake.azure.net/"
-    adlCreds = lib.auth(
-        tenant_id=tenant,
-        client_secret=client_secret,
-        client_id=client_id,
-        resource=RESOURCE,
+    _adls_creds = _adls.lib.auth(
+        tenant_id=_os.environ["AZURE_TENANT_ID"],
+        client_secret=_os.environ["AZURE_CLIENT_SECRET"],
+        client_id=_os.environ["AZURE_CLIENT_ID"],
+        resource="https://datalake.azure.net/",
     )
 except Exception as ex:
-    logging.warning(f"Azure creds not loaded: {ex}")
+    _LOGGER.warning(f"Azure creds not loaded: {ex}")
 
 
-SAFE_PATHS = []
+_SAFE_PATHS = []
 
 # Enforcement of write safety
 def set_safe_paths(list_of_paths):
     """ Set list of safe writeable paths """
-    global SAFE_PATHS
-    SAFE_PATHS = list_of_paths
+    global _SAFE_PATHS
+    _SAFE_PATHS = list_of_paths
 
 
-USE_SCRATCH_DIR = os.environ.get("USE_SCRATCH_DIR", False)
+_USE_SCRATCH_DIR = _os.environ.get("USE_SCRATCH_DIR", False)
 _scratch_dir = None
 _tmpdir = None
 
@@ -73,7 +67,7 @@ def get_temp_dir():
     global _tmpdir
 
     if not _tmpdir:
-        _tmpdir = tempfile.mkdtemp()
+        _tmpdir = _tempfile.mkdtemp()
     return _tmpdir
 
 
@@ -82,7 +76,7 @@ def get_scratch_dir():
 
     if not _scratch_dir:
         _scratch_dir = get_temp_dir()
-        os.environ["SCRATCH_DIR"] = _scratch_dir
+        _os.environ["SCRATCH_DIR"] = _scratch_dir
     return _scratch_dir
 
 
@@ -97,8 +91,8 @@ def _check_one_or_all(string_or_list, fn, agg_fn=all):
 
 # Path parsing
 def cleanup_filepath(filepath):
-    if "%USERPROFILE%" in filepath and "USERPROFILE" in os.environ:
-        filepath = filepath.replace("%USERPROFILE%", os.environ["USERPROFILE"])
+    if "%USERPROFILE%" in filepath and "USERPROFILE" in _os.environ:
+        filepath = filepath.replace("%USERPROFILE%", _os.environ["USERPROFILE"])
     filepath = filepath.replace("s3a://", "s3://")
     return filepath
 
@@ -163,19 +157,19 @@ def _pick_cloud_function(filepath, s3_fn, adl_fn, git_fn=None, else_fn=None):
 def file_exists(filepath):
     filepath = cleanup_filepath(filepath)
     fn = _pick_cloud_function(
-        filepath, s3_fn=s3_file_exists, adl_fn=adl_file_exists, else_fn=os.path.exists
+        filepath, s3_fn=s3_file_exists, adl_fn=adl_file_exists, else_fn=_os.path.exists
     )
     return fn(filepath)
 
 
 def s3_file_exists(filepath):
-    s3 = s3fs.S3FileSystem(anon=False)
+    s3 = _s3fs.S3FileSystem(anon=False)
     return s3.exists(filepath)
 
 
 def adl_file_exists(filepath):
     store_name, path = parse_adl_path(filepath)
-    adl = core.AzureDLFileSystem(adlCreds, store_name=store_name)
+    adl = _adls.core.AzureDLFileSystem(_adls_creds, store_name=store_name)
     return adl.exists(path)
 
 
@@ -184,7 +178,7 @@ def list_files(file_prefix):
         file_prefix,
         s3_fn=list_s3_files,
         adl_fn=list_adl_files,
-        else_fn=lambda prefix: [os.path.join(prefix, x) for x in os.listdir(prefix)],
+        else_fn=lambda prefix: [_os.path.join(prefix, x) for x in _os.listdir(prefix)],
     )
     return fn(file_prefix)
 
@@ -194,9 +188,9 @@ ls = list_files
 dir = list_files
 
 
-@logged("listing S3 files from '{s3_prefix}'")
+@_logs.logged("listing S3 files from '{s3_prefix}'")
 def list_s3_files(s3_prefix):
-    boto = boto3.resource("s3")
+    boto = _boto3.resource("s3")
     bucket_name, folder_key = parse_s3_path(s3_prefix)
     s3_bucket = boto.Bucket(bucket_name)
     file_list = []
@@ -204,13 +198,13 @@ def list_s3_files(s3_prefix):
         if object_summary.key[-1] == "/":
             pass  # key is a directory
         else:
-            file_list.append(os.path.join("s3://", bucket_name, object_summary.key))
+            file_list.append(_os.path.join("s3://", bucket_name, object_summary.key))
     return file_list
 
 
 def list_adl_files(adl_path_prefix):
     store_name, path_prefix = parse_adl_path(adl_path_prefix)
-    adl = core.AzureDLFileSystem(adlCreds, store_name=store_name)
+    adl = _adls.core.AzureDLFileSystem(_adls_creds, store_name=store_name)
     root = adl_path_prefix.split(path_prefix)[0]
     files = adl.walk(path_prefix)
     return [f"{root}{result}" for result in files]
@@ -218,7 +212,7 @@ def list_adl_files(adl_path_prefix):
 
 # File copy
 def copy_s3_file(s3_source_file, s3_target_file):
-    s3 = s3fs.S3FileSystem(anon=False)
+    s3 = _s3fs.S3FileSystem(anon=False)
     s3.cp(s3_source_file, s3_target_file)
 
 
@@ -237,7 +231,7 @@ def copy_file(source_file, target_file):
         tmp_path = download_file(source_file)
         upload_file(tmp_path, target_file)
     else:
-        raise shutil.copyfile(source_file, target_file)
+        raise _shutil.copyfile(source_file, target_file)
 
 
 # File deletion
@@ -251,7 +245,7 @@ def delete_file(filepath, ignore_missing=True):
 def delete_s3_file(s3_filepath, ignore_missing=True):
     if ignore_missing and not s3_file_exists(s3_filepath):
         return None
-    boto = boto3.resource("s3")
+    boto = _boto3.resource("s3")
     bucket_name, object_key = parse_s3_path(s3_filepath)
     boto.Object(bucket_name, object_key).delete()
 
@@ -260,14 +254,14 @@ def delete_adl_file(adl_filepath, ignore_missing=True):
     if ignore_missing and not adl_file_exists(adl_filepath):
         return None
     store_name, filepath = parse_adl_path(adl_filepath)
-    adl = core.AzureDLFileSystem(adlCreds, store_name=store_name)
+    adl = _adls.core.AzureDLFileSystem(_adls_creds, store_name=store_name)
     return adl.rm(filepath)
 
 
 def delete_local_file(filepath, ignore_missing=True):
-    if ignore_missing and not os.path.exists(filepath):
+    if ignore_missing and not _os.path.exists(filepath):
         return None
-    os.remove(filepath)
+    _os.remove(filepath)
 
 
 # File writes and uploads
@@ -280,8 +274,8 @@ def upload_file(local_path, remote_path):
 
 def upload_adl_file(local_path, adl_filepath):
     store_name, filepath = parse_adl_path(adl_filepath)
-    adl = core.AzureDLFileSystem(adlCreds, store_name=store_name)
-    multithread.ADLUploader(
+    adl = _adls.core.AzureDLFileSystem(_adls_creds, store_name=store_name)
+    _adls.multithread.ADLUploader(
         adl,
         lpath=local_path,
         rpath=filepath,
@@ -293,13 +287,13 @@ def upload_adl_file(local_path, adl_filepath):
 
 
 def upload_s3_file(local_path, s3_filepath):
-    s3 = boto3.client("s3")
+    s3 = _boto3.client("s3")
     bucket_name, object_key = parse_s3_path(s3_filepath)
     s3.upload_file(local_path, bucket_name, object_key)  # SAFE
 
 
 def create_s3_text_file(s3_filepath, contents):
-    s3 = boto3.client("s3")
+    s3 = _boto3.client("s3")
     path_parts = s3_filepath.replace("s3://", "").split("/")
     bucket_name, file_key = path_parts[0], "/".join(path_parts[1:])
     _ = s3.put_object(Bucket=bucket_name, Body=contents, Key=file_key)
@@ -310,14 +304,14 @@ def create_text_file(filepath, contents):
         filepath,
         s3_fn=create_s3_text_file,
         adl_fn=None,
-        else_fn=lambda filepath, contents: Path(filepath).write_text(contents),
+        else_fn=lambda filepath, contents: _Path(filepath).write_text(contents),
     )
     return fn(filepath, contents)
 
 
 # Folder operations
 def create_s3_folder(s3_folderpath):
-    s3 = boto3.client("s3")
+    s3 = _boto3.client("s3")
     bucket_name, folder_key = parse_s3_path(s3_folderpath)
     if not folder_key.endswith("/"):
         folder_key = folder_key + "/"
@@ -329,7 +323,7 @@ def create_folder(folderpath):
         folderpath,
         s3_fn=create_s3_folder,
         adl_fn=None,
-        else_fn=lambda folderpath: Path(folderpath).mkdir(parents=True, exist_ok=True),
+        else_fn=lambda folderpath: _Path(folderpath).mkdir(parents=True, exist_ok=True),
     )
     return fn(folderpath)
 
@@ -337,14 +331,15 @@ def create_folder(folderpath):
 # File downloads
 def download_file(remote_path, local_path):
     fn = _pick_cloud_function(
-        remote_path, s3_fn=download_s3_file, adl_fn=None, else_fn=shutil.copyfile
+        remote_path, s3_fn=download_s3_file, adl_fn=None, else_fn=_shutil.copyfile
     )
     return fn(remote_path, local_path)
 
 
-@logged(desc_detail="{s3_path}::{local_path}")
+@_logs.logged(desc_detail="{s3_path}::{local_path}")
 def download_s3_file(s3_path, local_path):
-    boto = boto3.resource("s3")
+    """ Downloads an S3 file """
+    boto = _boto3.resource("s3")
     bucket_name, object_key = parse_s3_path(s3_path)
     s3_bucket = boto.Bucket(bucket_name)
     s3_bucket.download_file(object_key, local_path)
@@ -359,11 +354,11 @@ def get_text_file_contents(filepath, encoding="utf-8"):
 
 
 # Folder downloads:
-@logged(desc_detail="{remote_folder}::{local_folder}")
+@_logs.logged(desc_detail="{remote_folder}::{local_folder}")
 def download_folder(remote_folder, local_folder, as_subfolder=False):
     """ Expects that destination folder does not exist or is empty """
     if as_subfolder:
-        local_folder = f"{local_folder}/{os.basename(remote_folder)}"
+        local_folder = f"{local_folder}/{_os.basename(remote_folder)}"
     fn = _pick_cloud_function(
         remote_folder,
         s3_fn=download_s3_folder,
@@ -374,13 +369,13 @@ def download_folder(remote_folder, local_folder, as_subfolder=False):
     return fn(remote_folder, local_folder)
 
 
-@logged(desc_detail="{remote_folder}::{local_folder}")
+@_logs.logged(desc_detail="{remote_folder}::{local_folder}")
 def _download_folder(remote_folder, local_folder):
     for remote_filepath in list_files(remote_folder):
         sub_path = remote_filepath.split(remote_folder)[1]
         sub_path = sub_path.lstrip("/\\")
-        local_filepath = os.path.join(local_folder, sub_path)
-        logging.info(f"Copying {remote_filepath} to {local_filepath}...")
+        local_filepath = _os.path.join(local_folder, sub_path)
+        _LOGGER.info(f"Copying {remote_filepath} to {local_filepath}...")
         download_file(remote_filepath, local_filepath)
 
 
@@ -388,25 +383,25 @@ def _download_folder(remote_folder, local_folder):
 copy_folder = download_folder
 
 
-@logged(desc_detail="{s3_prefix}::{local_folder}")
+@_logs.logged(desc_detail="{s3_prefix}::{local_folder}")
 def download_s3_folder(s3_prefix, local_folder):
-    for s3_file in list_s3_files(os.path.join(s3_prefix, "")):
-        target_file = os.path.join(local_folder, os.path.basename(s3_file))
+    for s3_file in list_s3_files(_os.path.join(s3_prefix, "")):
+        target_file = _os.path.join(local_folder, _os.path.basename(s3_file))
         download_s3_file(s3_file, target_file)
 
 
 def download_git_repo(repo_url, git_ref, target_dir):
-    jobs.run_command(f"git clone https://{repo_url} .", cwd=target_dir)
+    _jobs.run_command(f"git clone https://{repo_url} .", cwd=target_dir)
     if git_ref != "master":
-        jobs.run_command(f"git fetch", cwd=target_dir)
-        jobs.run_command(f"git checkout {git_ref}", cwd=target_dir)
+        _jobs.run_command(f"git fetch", cwd=target_dir)
+        _jobs.run_command(f"git checkout {git_ref}", cwd=target_dir)
 
 
 def download_git_folder(git_path, local_folder):
     repo_url, git_ref, code_path = parse_git_path(git_path)
     temp_folder = get_temp_dir()
     download_git_repo(repo_url, git_ref, temp_folder)
-    copy_folder(os.path.join(temp_folder, code_path), local_folder)
+    copy_folder(_os.path.join(temp_folder, code_path), local_folder)
 
 
 # Function wrappers for cloud IO
@@ -417,63 +412,63 @@ def s3write_using(func, *args, **kwargs):
     temp_path_map = {}
     for arg in args:
         if isinstance(arg, str) and arg.startswith("s3"):
-            tmppath = tempfile.NamedTemporaryFile(delete=False).name
+            tmppath = _tempfile.NamedTemporaryFile(delete=False).name
             temp_path_map[tmppath] = str(arg.replace("s3a:", "s3:"))
             newargs.append(tmppath)
         else:
             newargs.append(arg)
     for k, v in kwargs.items():
         if isinstance(v, str) and v.startswith("s3"):
-            tmppath = tempfile.NamedTemporaryFile(delete=False).name
+            tmppath = _tempfile.NamedTemporaryFile(delete=False).name
             temp_path_map[tmppath] = str(v.replace("s3a:", "s3:"))
             newkwargs[k] = tmppath
     func(*newargs, **newkwargs)
     if temp_path_map:
-        s3 = boto3.client("s3")
+        s3 = _boto3.client("s3")
         for local_path, s3_path in temp_path_map.items():
-            if SAFE_PATHS and not any([s3_path in safepath for safepath in SAFE_PATHS]):
+            if _SAFE_PATHS and not any([s3_path in safepath for safepath in _SAFE_PATHS]):
                 raise RuntimeError(
                     f"Path '{s3_path}' cannot be written to because it is not in the "
-                    f"designated safe output paths: '{', '.join(SAFE_PATHS)}'"
+                    f"designated safe output paths: '{', '.join(_SAFE_PATHS)}'"
                 )
-            logging.info(f"Uploading file to S3: {s3_path}")
+            _LOGGER.info(f"Uploading file to S3: {s3_path}")
             upload_s3_file(local_path, s3_path)
-            os.remove(local_path)
-        logging.info(f"S3 upload(s) complete!")
+            _os.remove(local_path)
+        _LOGGER.info(f"S3 upload(s) complete!")
 
 
 def s3read_using(func, *args, **kwargs):
     """ Send any function's output to s3 """
     newargs = []
     newkwargs = kwargs.copy()
-    tmpfolder = tempfile.gettempdir()
+    tmpfolder = _tempfile.gettempdir()
     temp_path_map = {}
     for arg in args:
         if isinstance(arg, str) and arg.startswith("s3"):
-            tmppath = os.path.join(tmpfolder, os.path.basename(arg))
+            tmppath = _os.path.join(tmpfolder, _os.path.basename(arg))
             temp_path_map[tmppath] = str(arg.replace("s3a:", "s3:"))
             newargs.append(tmppath)
         else:
             newargs.append(arg)
     for k, v in kwargs.items():
         if isinstance(v, str) and v.startswith("s3"):
-            tmppath = os.path.join(tmpfolder, os.path.basename(arg))
+            tmppath = _os.path.join(tmpfolder, _os.path.basename(arg))
             temp_path_map[tmppath] = str(v.replace("s3a:", "s3:"))
             newkwargs[k] = tmppath
     if temp_path_map:
         for local_path, s3_path in temp_path_map.items():
-            logging.info(f"Download file from S3: {s3_path}")
+            _LOGGER.info(f"Download file from S3: {s3_path}")
             download_s3_file(s3_path, local_path)
-        logging.info(f"S3 download(s) complete!")
-    logging.debug(
+        _LOGGER.info(f"S3 download(s) complete!")
+    _LOGGER.debug(
         "s3read_using() is running function with the following args:\n"
         f"{str(newargs)}\n{str(newkwargs)}"
     )
     result = func(*newargs, **newkwargs)
     if temp_path_map:
         for local_path, _ in temp_path_map.items():
-            logging.info(f"Deleting temporary local file: {local_path}")
-            os.remove(local_path)
+            _LOGGER.info(f"Deleting temporary local file: {local_path}")
+            _os.remove(local_path)
     return result
 
 
@@ -499,38 +494,34 @@ def load_aws_creds(update_env_vars=True):
     """ Load AWS creds. Returns a 2-item duple or None. """
     key, secret = None, None
     settings = {}
-    default_creds_file = os.environ.get(
-        "AWS_SHARED_CREDENTIALS_FILE", os.path.expanduser("~/.aws/credentials")
+    default_creds_file = _os.environ.get(
+        "AWS_SHARED_CREDENTIALS_FILE", _os.path.expanduser("~/.aws/credentials")
     )
-    default_config_file = os.environ.get(
-        "AWS_CONFIG_FILE", os.path.expanduser("~/.aws/config")
+    default_config_file = _os.environ.get(
+        "AWS_CONFIG_FILE", _os.path.expanduser("~/.aws/config")
     )
     if file_exists(default_creds_file):
-        logging.info(f"Parsing AWS credentials file '{default_creds_file}'...")
-        settings.update(
-            _get_aws_settings_from_file(default_creds_file)
-        )
+        _LOGGER.info(f"Parsing AWS credentials file '{default_creds_file}'...")
+        settings.update(_get_aws_settings_from_file(default_creds_file))
     if file_exists(default_config_file):
-        logging.info(f"Parsing AWS config file '{default_config_file}'...")
-        settings.update(
-            _get_aws_settings_from_file(default_config_file)
-        )
-    if "AWS_ACCESS_KEY_ID" in os.environ and "AWS_SECRET_ACCESS_KEY" in os.environ:
-        logging.info("Found env vars: 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_ACCESS_KEY'")
-        settings["AWS_ACCESS_KEY_ID"] = os.environ["AWS_ACCESS_KEY_ID"]
-        settings["AWS_SECRET_ACCESS_KEY"] = os.environ["AWS_SECRET_ACCESS_KEY"]
+        _LOGGER.info(f"Parsing AWS config file '{default_config_file}'...")
+        settings.update(_get_aws_settings_from_file(default_config_file))
+    if "AWS_ACCESS_KEY_ID" in _os.environ and "AWS_SECRET_ACCESS_KEY" in _os.environ:
+        _LOGGER.info("Found env vars: 'AWS_ACCESS_KEY_ID' and 'AWS_SECRET_ACCESS_KEY'")
+        settings["AWS_ACCESS_KEY_ID"] = _os.environ["AWS_ACCESS_KEY_ID"]
+        settings["AWS_SECRET_ACCESS_KEY"] = _os.environ["AWS_SECRET_ACCESS_KEY"]
     if "AWS_ACCESS_KEY_ID" not in settings or "AWS_SECRET_ACCESS_KEY" not in settings:
         raise RuntimeError(f"Could not find AWS creds in file or env variables.")
     key = settings["AWS_ACCESS_KEY_ID"]
     secret = settings["AWS_SECRET_ACCESS_KEY"]
     if update_env_vars:
-        os.environ["AWS_ACCESS_KEY_ID"] = key
-        os.environ["AWS_SECRET_ACCESS_KEY"] = secret
+        _os.environ["AWS_ACCESS_KEY_ID"] = key
+        _os.environ["AWS_SECRET_ACCESS_KEY"] = secret
     return key, secret
 
 
 def main():
-    fire.Fire()
+    _fire.Fire()
 
 
 if __name__ == "__main__":

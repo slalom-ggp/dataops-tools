@@ -8,8 +8,6 @@ ENV SPARK_WAREHOUSE_ROOT /spark_warehouse
 ENV SPARK_WAREHOUSE_DIR /spark_warehouse/data
 ENV SPARK_METASTORE_DIR /spark_warehouse/metastore
 
-ENV SPARK_UDF_MODULE ${PROJECT_DIR}/tools/spark/udfs
-
 # e.g. ['MySQL', 'derby']
 
 RUN pip install --upgrade pip
@@ -20,6 +18,7 @@ RUN curl https://gist.githubusercontent.com/aaronsteers/f4c072058a3317ee3904f713
 # RUN curl https://raw.githubusercontent.com/AIDungeon/AIDungeon/develop/AIDungeon_2.ipynb > AIDungeon.ipynb
 
 COPY . /home/dataops-tools
+ENV SPARK_UDF_MODULE /home/dataops-tools/slalom/tests/resources/spark_udf_tests/udfs
 
 WORKDIR /home/dataops-tools
 RUN python3 setup.py install
