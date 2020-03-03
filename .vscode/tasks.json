@@ -126,9 +126,6 @@
             "type": "shell", // "shell" or "process"
             "options": {
                 "cwd": "infra",
-                "env": {
-                    "TF_WARN_OUTPUT_ERRORS": "1"
-                },
                 "statusbar": {
                     "color": "#ffffff",
                     "tooltip": "Click to shut down ALL cloud resources...",

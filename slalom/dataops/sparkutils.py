@@ -191,6 +191,7 @@ def _get_hadoop_conf():
         hadoop_conf = _add_derby_metastore_config(hadoop_conf)
     return hadoop_conf
 
+
 # GLOBALS
 
 spark = None
@@ -364,7 +365,7 @@ def _init_local_spark():
 
 @logged("importing from dynamic python file '{absolute_file_path}'")
 def path_import(absolute_file_path):
-    '''implementation taken from https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly'''
+    """implementation taken from https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly"""
     module_name = os.path.basename(absolute_file_path)
     module_name = ".".join(module_name.split(".")[:-1])  # removes .py suffix
     spec = importlib.util.spec_from_file_location(module_name, absolute_file_path)
@@ -646,7 +647,7 @@ def save_spark_table(
             escape='"',
         )
     except Exception as ex:  # intermittent failures can be caused by eventual consistency
-        logging.warn(
+        logging.warning(
             f"Retrying S3 table save operation because the first attempt failed ({ex})"
         )
         time.sleep(20)  # Sleep to allow S3 to reach eventual consistency
@@ -683,11 +684,7 @@ def create_calendar_table(table_name, start_date, end_date):
     "starting spark server with args:"
     " dockerized={dockerized}, with_jupyter={with_jupyter}"
 )
-def start_server(
-    dockerized: bool = None,
-    with_jupyter: bool = True,
-    daemon: bool = None
-):
+def start_server(dockerized: bool = None, with_jupyter: bool = True, daemon: bool = None):
     if dockerized is None:
         dockerized = (
             False

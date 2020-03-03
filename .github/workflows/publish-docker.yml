@@ -58,3 +58,20 @@ jobs:
           tagAs: latest
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPassword: ${{ secrets.DOCKER_SECRET }}
+  docker_singer_publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone git repo
+        uses: actions/checkout@v1
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+      - name: Install slalom.dataops
+        run: python3 setup.py install
+      - name: Login to docker
+        run: docker login -u ${{ secrets.DOCKER_USER }} -p ${{ secrets.DOCKER_SECRET }}
+      - name: Build and push all singer images
+        run: cd containers/singer && s-tap build_all_images --push
+      - name: Print list of images
+        run: docker image ls

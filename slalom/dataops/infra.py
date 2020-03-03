@@ -40,7 +40,7 @@ def update_var_outputs(infra_dir, output_vars=[]):
 
 def install(*args, infra_dir="./infra", deploy=False, git_ref="master"):
     """
-    Usage example: 
+    Usage example:
     ```
     s-infra install catalog:aws-prereqs --infra_dir=infra/prereqs --deploy=True
     s-infra install samples:aws --infra_dir=infra --deploy=True
@@ -94,6 +94,54 @@ def init_and_apply(infra_dir: str = "./infra/", save_output: bool = False):
     apply(infra_dir=infra_dir, save_output=save_output, prompt=False)
 
 
+def change_upstream_source(
+    dir_to_update=".",
+    git_repo="https://github.com/slalom-ggp/dataops-infra",
+    branch="master",
+    relative_path="../../dataops-infra",
+    to_relative=False,
+    to_git=False,
+    dry_run=False,
+):
+    """Change Terraform source"""
+    if to_relative and to_git or not (to_relative or to_git):
+        raise ValueError("Must specify `--to_git` or `--to_relative`, but not both.")
+    for tf_file in io.list_files(dir_to_update):
+        if tf_file.endswith(".tf"):
+            # print(tf_file)
+            new_lines = []
+            for line in io.get_text_file_contents(tf_file).splitlines():
+                new_line = line
+                if line.lstrip().startswith("source "):
+                    current_path = line.lstrip().split('"')[1]
+                    start_pos = max(
+                        [current_path.find("catalog/"), current_path.find("components/")]
+                    )
+                    if start_pos > 0:
+                        module_path = current_path[start_pos:].split("?ref=")[0]
+                        if to_relative:
+                            local_patten = "{relative_path}/{path}"
+                            new_path = local_patten.format(
+                                relative_path="../../dataops-infra", path=module_path
+                            )
+                        elif to_git:
+                            git_pattern = "git::{git_repo}//{path}?ref={branch}"
+                            new_path = git_pattern.format(
+                                git_repo=git_repo, path=module_path, branch=branch
+                            )
+                        print(f"{current_path} \n\t\t\t>> {new_path}")
+                        new_line = f'  source = "{new_path}"'
+                new_lines.append(new_line)
+            new_file_text = "\n".join(new_lines)
+            if dry_run:
+                print(f"\n\n------------\n-- {tf_file}\n------------")
+                print(new_file_text)
+            else:
+                io.create_text_file(tf_file, new_file_text)
+    if not dry_run:
+        jobs.run_command("terraform fmt -recursive", dir_to_update)
+
+
 def main():
     fire.Fire(
         {
@@ -102,6 +150,7 @@ def main():
             "apply": apply,
             "init+apply": init_and_apply,
             "deploy": init_and_apply,
+            "change_upstream_source": change_upstream_source,
         }
     )
 
