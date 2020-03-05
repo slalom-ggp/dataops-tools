@@ -8,7 +8,13 @@ import os
 import sys
 import time
 
-import psutil
+try:
+    import psutil
+except Exception as ex:
+    psutil = None
+    logging.warning(
+        f"Could not load psutils. Some logging function may not be available. {ex}"
+    )
 
 
 def get_logger(app_name, debug=os.environ.get("DEBUG", None)):
@@ -108,6 +114,8 @@ def ram_usage_string(process_id=None):
     """
     Return a string representing the amount and percentage of memory used by this process.
     """
+    if not psutil:
+        return "(unknown mem usage - missing psutil library)"
     process = psutil.Process(process_id or os.getpid())
     amount = bytes_to_string(process.memory_info().rss)
     percent = process.memory_percent()
@@ -118,6 +126,8 @@ def cpu_usage_string(process_id=None):
     """
     Return a string representing the amount and percentage of memory used by this process.
     """
+    if not psutil:
+        return "(unknown CPU usage - missing psutil library)"
     process = psutil.Process(process_id or os.getpid())
     return f"(CPU {process.cpu_percent(interval=0.2)}%)"
 
@@ -300,7 +310,7 @@ class logged(object):
 
         def wrapped_fn(*args, **kwargs):
             """
-            The decorated function definition. Note that the log needs access to 
+            The decorated function definition. Note that the log needs access to
             all passed arguments to the decorator, as well as all of the function's
             native args in a dictionary, even if args are not provided by keyword.
             If start_msg is None or success_msg is None, those log entries are skipped.
@@ -308,7 +318,7 @@ class logged(object):
 
             def re_eval(context_dict, context_key: str):
                 """
-                Evaluate the f-string in context_dict[context_key], 
+                Evaluate the f-string in context_dict[context_key],
                 store back the result
                 """
                 try:

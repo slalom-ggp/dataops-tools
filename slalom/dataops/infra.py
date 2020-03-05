@@ -122,7 +122,7 @@ def change_upstream_source(
                         if to_relative:
                             local_patten = "{relative_path}/{path}"
                             new_path = local_patten.format(
-                                relative_path="../../dataops-infra", path=module_path
+                                relative_path=relative_path, path=module_path
                             )
                         elif to_git:
                             git_pattern = "git::{git_repo}//{path}?ref={branch}"
