@@ -5,7 +5,7 @@ print("Loaded file")
 
 def main(infile, outfile):
     """
-    Process the picked model input `infile` and save to `outfile`
+    Process the pickled model input `infile` and save to `outfile`.
 
     Parameters:
         infile (str): the input path
