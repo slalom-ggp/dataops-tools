@@ -4,6 +4,13 @@ print("Loaded file")
 
 
 def main(infile, outfile):
+    """
+    Process the picked model input `infile` and save to `outfile`
+
+    Parameters:
+        infile (str): the input path
+        outfile (str): the output path
+    """
     print(f"Beginning job to process '{infile}' and save to '{outfile}'")
     print("Processing complete")
 

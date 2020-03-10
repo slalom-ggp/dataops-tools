@@ -24,7 +24,19 @@ docker build -t slalomggp/shap .
 
 ## Testing the image
 
+Locally:
+
 ```bash
+python ./shap-run.py --help
+
+python ./shap-run.py --infile=s3://my-test/path/to/file --outfile=s3://my-test/path/to/out
+```
+
+Via docker:
+
+```bash
+docker run -it --rm slalomggp/shap ./shap-run.py --help
+
 docker run -it --rm slalomggp/shap --infile=s3://my-test/path/to/file --outfile=s3://my-test/path/to/out
 ```
 
