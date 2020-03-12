@@ -16,6 +16,7 @@ if not detected_version and os.path.exists(version_filepath):
             detected_version = f"{detected_version}.{os.environ['BUILD_NUMBER']}"
 if not detected_version:
     raise RuntimeError("Error. Could not detect version.")
+detected_version = detected_version.replace(".dev0", "")
 if os.environ.get("BRANCH_NAME", "unknown") not in ["master", "refs/heads/master"]:
     detected_version = f"{detected_version}.dev0"
 
@@ -70,3 +71,4 @@ setup(
         "Programming Language :: Python :: 3.7",
     ],
 )
+Path(version_filepath).write_text(f"v{detected_version.replace('.dev0', '')}")

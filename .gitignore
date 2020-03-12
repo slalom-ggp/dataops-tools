@@ -31,3 +31,4 @@ Notebooks
 dist
 infra/outputs
 test-reports
+.mypy_cache

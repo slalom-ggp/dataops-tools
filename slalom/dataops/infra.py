@@ -3,7 +3,7 @@ from joblib import Parallel, delayed
 import os
 import sys
 from pathlib import Path
-
+from typing import Dict, List
 import fire
 from tqdm import tqdm
 
@@ -15,9 +15,29 @@ sys.path.append(os.path.dirname(code_file))
 from slalom.dataops.logs import get_logger, logged, logged_block
 from slalom.dataops import jobs, io
 
-
 DEBUG = False
 logging = get_logger("slalom.dataops.infra", debug=DEBUG)
+
+SPECIAL_CASE_WORDS = ["AWS", "ECR", "ECS", "IAM", "VPC", "DBT", "EC2"]
+
+
+def _proper(str: str, title_case=True, special_case_words=SPECIAL_CASE_WORDS):
+    """
+    Return the same string in proper case, respected override rules for
+    acronyms and special-cased words.
+    """
+    word_lookup = {w.lower(): w for w in special_case_words}
+    if title_case:
+        str = str.title()
+    words = str.split(" ")
+    new_words = []
+    for word in words:
+        new_subwords = []
+        for subword in word.split("-"):
+            new_subwords.append(word_lookup.get(subword.lower(), subword))
+        new_word = "-".join(new_subwords)
+        new_words.append(new_word)
+    return " ".join(new_words)
 
 
 def _update_var_output(output_var):
@@ -94,6 +114,201 @@ def init_and_apply(infra_dir: str = "./infra/", save_output: bool = False):
     apply(infra_dir=infra_dir, save_output=save_output, prompt=False)
 
 
+DOCS_HEADER = """
+# {module_title}
+
+`{module_path}`
+
+## Overview
+
+
+"""
+
+DOCS_FOOTNOTE = """
+---------------------
+
+_**NOTE:** This documentation was auto-generated using
+`terraform-docs` and `s-infra` from `slalom.dataops`.
+Please do not attempt to manually update this file._
+"""
+
+
+def update_module_docs(
+    tf_dir: str,
+    recursive: bool = True,
+    readme: str = "README.md",
+    footnote: bool = True,
+    header: bool = True,
+):
+    """
+    Replace all README.md files with auto-generated documentation, a wrapper
+    around the `terraform-docs` tool.
+
+    Parameters:
+    ----------
+    tf_dir: Directory of terraform scripts to document.
+    recursive : Optional (default=True). 'True' to run on all subdirectories, recursively.
+    readme : Optional (default="README.md"). The filename to create when generating docs.
+    footnote: Optional (default=True). 'True' to include the standard footnote.
+
+    Returns:
+    -------
+    None
+    """
+    markdown_text = ""
+    if ".git" not in tf_dir and ".terraform" not in tf_dir:
+        if [x for x in io.list_files(tf_dir) if x.endswith(".tf")]:
+            module_title = _proper(os.path.basename(tf_dir))
+            parent_dir_name = os.path.basename(Path(tf_dir).parent)
+            if parent_dir_name != ".":
+                module_title = f"{_proper(parent_dir_name)} {module_title}"
+            module_path = tf_dir.replace(".", "").replace("//", "/").replace("\\", "/")
+            _, markdown_output = jobs.run_command(
+                f"terraform-docs md --no-providers --sort-by-required {tf_dir}",
+                echo=False,
+            )
+            if header:
+                markdown_text += DOCS_HEADER.format(
+                    module_title=module_title, module_path=module_path
+                )
+            markdown_text += markdown_output
+            for extra_file in ["NOTES.md"]:
+                extra_filepath = f"{tf_dir}/{extra_file}"
+                if os.path.isfile(extra_filepath):
+                    markdown_text += io.get_text_file_contents(extra_filepath) + "\n"
+            if footnote:
+                markdown_text += DOCS_FOOTNOTE
+            io.create_text_file(f"{tf_dir}/{readme}", markdown_text)
+    if recursive:
+        for folder in io.list_files(tf_dir):
+            if os.path.isdir(folder):
+                update_module_docs(folder, recursive=recursive, readme=readme)
+
+
+def get_tf_metadata(
+    tf_dir: str, recursive: bool = False,
+):
+    """
+    Return a dictionary of Terraform module paths to JSON metadata about each module,
+    a wrapper around the `terraform-docs` tool.
+
+    Parameters:
+    ----------
+    tf_dir: Directory of terraform scripts to scan.
+    recursive : Optional (default=True). 'True' to run on all subdirectories, recursively.
+
+    Returns:
+    -------
+    dict
+    """
+    import json
+
+    result = {}
+    if (
+        ".git" not in tf_dir
+        and ".terraform" not in tf_dir
+        and "samples" not in tf_dir
+        and "tests" not in tf_dir
+    ):
+        if [x for x in io.list_files(tf_dir) if x.endswith(".tf")]:
+            _, json_text = jobs.run_command(f"terraform-docs json {tf_dir}", echo=False)
+            result[tf_dir] = json.loads(json_text)
+    if recursive:
+        for folder in io.list_files(tf_dir):
+            folder = folder.replace("\\", "/")
+            if os.path.isdir(folder):
+                result.update(get_tf_metadata(folder, recursive=recursive))
+    return result
+
+
+def check_tf_metadata(
+    tf_dir,
+    recursive: bool = True,
+    check_module_headers: bool = True,
+    check_input_descriptions: bool = True,
+    check_output_descriptions: bool = True,
+    required_input_vars: list = ["name_prefix", "resource_tags", "environment"],
+    required_output_vars: list = ["summary"],
+    raise_error=True,
+    abspath=False,
+):
+    """
+    Return a dictionary of reference paths to error messages and a dictionary
+    of errors to reference paths.
+    """
+
+    def _log_issue(module_path, issue_desc, details_list):
+        if details_list:
+            if issue_desc in error_locations:
+                error_locations[issue_desc].extend(details_list)
+            else:
+                error_locations[issue_desc] = details_list
+
+    error_locations: Dict[str, List[str]] = {}
+    with logged_block("checking Terraform modules against repository code standards"):
+        modules_metadata = get_tf_metadata(tf_dir, recursive=recursive)
+        for module_path, metadata in modules_metadata.items():
+            if abspath:
+                path_sep = os.path.sep
+                module_path = os.path.abspath(module_path)
+                module_path = module_path.replace("\\", path_sep).replace("/", path_sep)
+            else:
+                path_sep = "/"
+            if check_module_headers and not metadata["header"]:
+                _log_issue(
+                    module_path,
+                    "1. Blank module headers",
+                    [f"{module_path}{path_sep}main.tf"],
+                )
+            if required_input_vars:
+                issue_details = [
+                    f"{module_path}{path_sep}variables.tf:var.{required_input}"
+                    for required_input in required_input_vars
+                    if required_input
+                    not in [var["name"] for var in metadata.get("inputs", {})]
+                ]
+                _log_issue(
+                    module_path, "2. Missing required input variables", issue_details
+                )
+            if required_output_vars:
+                issue_details = [
+                    f"{module_path}{path_sep}outputs.tf:output.{required_output}"
+                    for required_output in required_output_vars
+                    if required_output
+                    not in [var["name"] for var in metadata.get("outputs", {})]
+                ]
+                _log_issue(
+                    module_path, "3. Missing required output variables", issue_details
+                )
+            if check_input_descriptions:
+                issue_details = [
+                    f"{module_path}{path_sep}variables.tf:var.{var['name']}"
+                    for var in metadata.get("inputs", {})
+                    if not var.get("description")
+                ]
+                _log_issue(
+                    module_path, "4. Missing input variable descriptions", issue_details
+                )
+            if check_output_descriptions:
+                issue_details = [
+                    f"{module_path}{path_sep}outputs.tf:output.{var['name']}"
+                    for var in metadata.get("outputs", {})
+                    if not var.get("description")
+                ]
+                _log_issue(
+                    module_path, "5. Missing output variable descriptions", issue_details
+                )
+    result_str = "\n".join(
+        [
+            f"\n{k}:\n    - [ ] " + ("\n    - [ ] ".join(error_locations[k]))
+            for k in sorted(error_locations.keys())
+        ]
+    )
+    if raise_error and error_locations:
+        raise ValueError(f"One or more validation errors occurred.\n{result_str}")
+    return result_str
+
+
 def change_upstream_source(
     dir_to_update=".",
     git_repo="https://github.com/slalom-ggp/dataops-infra",
@@ -151,6 +366,9 @@ def main():
             "init+apply": init_and_apply,
             "deploy": init_and_apply,
             "change_upstream_source": change_upstream_source,
+            "update_module_docs": update_module_docs,
+            "get_tf_metadata": get_tf_metadata,
+            "check_tf_metadata": check_tf_metadata,
         }
     )
 
