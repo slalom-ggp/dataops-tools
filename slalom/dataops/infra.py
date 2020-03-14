@@ -18,14 +18,15 @@ from slalom.dataops import jobs, io
 DEBUG = False
 logging = get_logger("slalom.dataops.infra", debug=DEBUG)
 
-SPECIAL_CASE_WORDS = ["AWS", "ECR", "ECS", "IAM", "VPC", "DBT", "EC2"]
+SPECIAL_CASE_WORDS = ["AWS", "ECR", "ECS", "IAM", "VPC", "DBT", "EC2", "RDS", "MySQL"]
 
 
-def _proper(str: str, title_case=True, special_case_words=SPECIAL_CASE_WORDS):
+def _proper(str: str, title_case=True, special_case_words=None):
     """
     Return the same string in proper case, respected override rules for
     acronyms and special-cased words.
     """
+    special_case_words = special_case_words or SPECIAL_CASE_WORDS
     word_lookup = {w.lower(): w for w in special_case_words}
     if title_case:
         str = str.title()
@@ -124,7 +125,20 @@ DOCS_HEADER = """
 
 """
 
-DOCS_FOOTNOTE = """
+
+# TODO: inject into footer:
+# ## Import Template
+
+# Copy-paste the below to get started with this module in your own project:
+
+# ```hcl
+# module "{clean_name}" {
+#     source = "git::{git_repo}/{module_path}?ref=master"
+
+#     // ...
+# }
+# ```
+DOCS_FOOTER = """
 ---------------------
 
 _**NOTE:** This documentation was auto-generated using
@@ -137,8 +151,10 @@ def update_module_docs(
     tf_dir: str,
     recursive: bool = True,
     readme: str = "README.md",
-    footnote: bool = True,
+    footer: bool = True,
     header: bool = True,
+    special_case_words: List[str] = None,
+    git_repo: str = "https://github.com/slalom-ggp/dataops-infra",
 ):
     """
     Replace all README.md files with auto-generated documentation, a wrapper
@@ -150,6 +166,8 @@ def update_module_docs(
     recursive : Optional (default=True). 'True' to run on all subdirectories, recursively.
     readme : Optional (default="README.md"). The filename to create when generating docs.
     footnote: Optional (default=True). 'True' to include the standard footnote.
+    special_case_words: Optional. A list of words to override special casing rules.
+    git_repo: Optional. The git repo path to use in rendering 'source' paths.
 
     Returns:
     -------
@@ -158,10 +176,15 @@ def update_module_docs(
     markdown_text = ""
     if ".git" not in tf_dir and ".terraform" not in tf_dir:
         if [x for x in io.list_files(tf_dir) if x.endswith(".tf")]:
-            module_title = _proper(os.path.basename(tf_dir))
+            module_title = _proper(
+                os.path.basename(tf_dir), special_case_words=special_case_words
+            )
             parent_dir_name = os.path.basename(Path(tf_dir).parent)
             if parent_dir_name != ".":
-                module_title = f"{_proper(parent_dir_name)} {module_title}"
+                module_title = _proper(
+                    f"{parent_dir_name} {module_title}",
+                    special_case_words=special_case_words,
+                )
             module_path = tf_dir.replace(".", "").replace("//", "/").replace("\\", "/")
             _, markdown_output = jobs.run_command(
                 f"terraform-docs md --no-providers --sort-by-required {tf_dir}",
@@ -176,8 +199,8 @@ def update_module_docs(
                 extra_filepath = f"{tf_dir}/{extra_file}"
                 if os.path.isfile(extra_filepath):
                     markdown_text += io.get_text_file_contents(extra_filepath) + "\n"
-            if footnote:
-                markdown_text += DOCS_FOOTNOTE
+            if footer:
+                markdown_text += DOCS_FOOTER
             io.create_text_file(f"{tf_dir}/{readme}", markdown_text)
     if recursive:
         for folder in io.list_files(tf_dir):

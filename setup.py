@@ -58,9 +58,10 @@ setup(
         "xmlrunner",
     ],
     extras_require={
-        "AWS": ["awscli", "s3fs"],
+        "AWS": ["awscli", "boto3", "s3fs"],
         "Azure": ["azure"],
         "Pandas": ["pandas"],
+        "S3": ["boto3", "s3fs"],
         "Spark": ["pyspark"],
     },
     classifiers=[
