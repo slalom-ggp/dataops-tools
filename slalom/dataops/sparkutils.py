@@ -149,7 +149,8 @@ def _add_aws_creds_config(hadoop_conf):
         + " -Djava.net.preferIPv4Stack=true -Dcom.amazonaws.services.s3.enableV4=true"
     )
     try:
-        key, secret = io.load_aws_creds()
+        key, secret, token = io.parse_aws_creds()
+        io.set_aws_env_vars(key, secret, token)
         logging.info(
             f"Successfully loaded AWS creds for access key: ****************{key[-4:]}"
         )
@@ -215,7 +216,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
         "10000": "10000",  # Thrift JDBC port for SQL queries
         "18080": "18080",  # History Server Web UI
     }
-    io.load_aws_creds(update_env_vars=True)
+    io.set_aws_env_vars()
     env = [
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",

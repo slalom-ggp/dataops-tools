@@ -1,13 +1,13 @@
 #!bin/env python3
 
-import re
-import os
 import json
-import yaml
-import sys
+import os
 from pathlib import Path
-from collections import OrderedDict
+import re
+import sys
+
 import fire
+import yaml
 
 from slalom.dataops import env, io, jobs
 from slalom.dataops.logs import logged, logged_block, get_logger
@@ -18,12 +18,10 @@ SINGER_PLUGINS_INDEX = os.environ.get("SINGER_PLUGINS_INDEX", "./singer_index.ym
 logging = get_logger("slalom.dataops.taputils")
 
 try:
-    import docker
     from slalom.dataops import dockerutils
 except Exception as ex:
-    docker = None
-    dockerutils = None
-    logging.warning("Docker libraries were not able to be loaded ({ex}).")
+    dockerutils = None  # type: ignore
+    logging.warning(f"Docker libraries were not able to be loaded ({ex}).")
 
 
 # ROOT_DIR = "."
@@ -34,6 +32,7 @@ BASE_DOCKER_IMAGE = "slalomggp/singer"
 
 
 def _get_root_dir():
+    # return _ROOT_DIR
     return "."
 
 
@@ -49,21 +48,18 @@ def _get_scratch_dir():
     return result
 
 
-def _get_root_dir():
-    return _ROOT_DIR
-
-
-def _get_secrets_dir():
-    return os.environ.get("TAP_SECRETS_DIR", f"{_get_root_dir()}/.secrets")
-
-
-def _get_scratch_dir():
-    return os.environ.get("TAP_SCRATCH_DIR", f"{_get_root_dir()}/.output")
-
-
 def _get_taps_dir(override=None):
     taps_dir = override or os.environ.get("TAP_CONFIG_DIR", ".")
     return io.make_local(taps_dir)  # if remote path provided, download locally
+
+
+def _get_state_file_path():
+    result = os.environ.get("TAP_STATE_FILE", None)
+    if not result:
+        logging.warning(
+            "Could not locate env var 'TAP_STATE_FILE'. State may not be maintained."
+        )
+    return result
 
 
 def _get_catalog_output_dir(tap_name):
@@ -76,13 +72,24 @@ def _get_plan_file(tap_name, taps_dir=None):
     return os.path.join(_get_taps_dir(taps_dir), f"data-plan-{tap_name}.yml")
 
 
-def _get_select_file(taps_dir=None):
+def _get_rules_file(taps_dir=None):
     return os.path.join(_get_taps_dir(taps_dir), f"data.select")
+
+
+def _get_catalog_tables_dict(catalog_file):
+    catalog_full = json.loads(Path(catalog_file).read_text())
+    table_objects = {s["stream"]: s for s in catalog_full["streams"]}
+    return table_objects
+
+
+def _get_catalog_table_columns(table_object):
+    return table_object["schema"]["properties"].keys()
 
 
 def _get_config_file(plugin_name, config_dir=None):
     """
-    Returns a path to the configuration file which also contains secrets.
+    Return a path to the configuration file which also contains secrets.
+
      - If file is blank or does not exist at the default secrets path, a new file will be created.
      - If any environment variables exist in the form of TAP_MY_TAP_my_setting, a new file
     will be created which contains these settings.
@@ -109,8 +116,7 @@ def _get_config_file(plugin_name, config_dir=None):
         io.create_folder(str(Path(tmp_path).parent))
         io.create_text_file(tmp_path, json.dumps(conf_dict))
         return tmp_path
-    else:
-        return default_path
+    return default_path
 
 
 @logged(
@@ -151,9 +157,10 @@ def discover(tap_name, config_file=None, catalog_dir=None):
 @logged("Updating plan file for 'tap-{tap_name}'")
 def plan(tap_name, taps_dir=None, config_file=None, config_dir=None, rescan=None):
     """
-    Perform all actions necessary to prepare (plan) for a tap execution:
+    Perform all actions necessary to prepare (plan) for a tap execution.
+
      1. Scan (discover) the source system metadata (if catalog missing or `rescan=True`)
-     2. Apply filter rules from `select_file` and create human-readable `plan.yml` file to
+     2. Apply filter rules from `rules_file` and create human-readable `plan.yml` file to
         describe planned inclusions/exclusions.
      2. Create a new `catalog-selected.json` file which applies the plan file and which
         can be used by the tap to run data extractions.
@@ -177,16 +184,15 @@ def plan(tap_name, taps_dir=None, config_file=None, config_dir=None, rescan=None
         io.delete_file(catalog_file)
     if rescan or not io.file_exists(catalog_file):
         discover(tap_name, config_file, catalog_dir)
-    select_file = _get_select_file(taps_dir)
+    rules_file = _get_rules_file(taps_dir)
     select_rules = [
         line.split("#")[0].rstrip()
-        for line in io.get_text_file_contents(select_file).splitlines()
+        for line in io.get_text_file_contents(rules_file).splitlines()
         if line.split("#")[0].rstrip()
     ]
     matches = {}
     excluded_tables = []
-    for table_object in _get_catalog_table_objects(catalog_file):
-        table_name = table_object["stream"]
+    for table_name, table_object in _get_catalog_tables_dict(catalog_file).items():
         table_match_text = f"{tap_name}.{table_name}"
         if _table_match_check(table_match_text, select_rules):
             matches[table_name] = {}
@@ -240,7 +246,7 @@ def sync(
     state_file=None,
     dockerized: bool = None,
 ):
-    """ Run a tap sync. If table_name is omitted, all sources will be extracted. """
+    """Run a tap sync. If table_name is omitted, all sources will be extracted."""
     if dockerized is None:
         if env.is_windows() or env.is_mac():
             logging.info(
@@ -250,14 +256,16 @@ def sync(
             _rerun_dockerized(tap_name, target_name)
             return
     taps_dir = _get_taps_dir(taps_dir)
-    select_file = _get_select_file(taps_dir)
+    rules_file = _get_rules_file(taps_dir)
     config_file = config_file or _get_config_file(f"tap-{tap_name}", config_dir)
     target_config_file = target_config_file or _get_config_file(
         f"target-{target_name}", config_dir
     )
     catalog_dir = catalog_dir or _get_catalog_output_dir(tap_name)
     full_catalog_file = f"{catalog_dir}/{tap_name}-catalog-selected.json"
-    if rescan or select_file or not io.file_exists(full_catalog_file):
+    if rescan or rules_file or not io.file_exists(full_catalog_file):
+        # Create or update `*-catalog-selected.json` and `plan-*.yml` files
+        # using the `data.select` rules file
         plan(
             tap_name,
             taps_dir=taps_dir,
@@ -265,44 +273,127 @@ def sync(
             config_dir=catalog_dir,
             rescan=rescan,
         )
-    if table_name and table_name != "*":
-        catalog_file = f"{catalog_dir}/{tap_name}-{table_name}-catalog.json"
-        state_file = state_file or f"{catalog_dir}/{table_name}-state.json"
+    if table_name is None or table_name == "*":
+        list_of_tables = _get_catalog_tables_dict(full_catalog_file).keys()
+    else:
+        list_of_tables = [table_name]
+
+    for table in list_of_tables:
+        # Call each tap independently so that table state files are kept separate:
+        tmp_catalog_file = f"{catalog_dir}/{tap_name}-{table}-catalog.json"
+        table_state_file = (
+            state_file or _get_state_file_path() or f"{catalog_dir}/{table}-state.json"
+        )
         _create_single_table_catalog(
             tap_name=tap_name,
-            table_name=table_name,
+            table_name=table,
             full_catalog_file=full_catalog_file,
-            output_file=catalog_file,
+            output_file=tmp_catalog_file,
         )
+        _sync_one_table(
+            tap_name=tap_name,
+            target_name=target_name,
+            table_name=table,
+            config_file=config_file,
+            target_config_file=target_config_file,
+            table_catalog_file=tmp_catalog_file,
+            table_state_file=table_state_file,
+        )
+
+
+S3_TARGET_IDS = ["S3-CSV"]
+
+
+def _get_customized_target_config_file(
+    target_name, target_config_file, *, tap_name, table_name, tap_version_num,
+):
+    config_defaults = json.loads(io.get_text_file_contents(target_config_file))
+    new_config = config_defaults.copy()
+    if target_name.upper() in S3_TARGET_IDS:
+        logging.info(f"Scanning for AWS creds for target 'target-{target_name}'")
+        aws_access_key_id, aws_secret_access_key, aws_session_token = io.parse_aws_creds()
+        if aws_access_key_id and "aws_access_key_id" not in config_defaults:
+            logging.info(f"Passing 'aws_access_key_id' to 'target-{target_name}'")
+            new_config["aws_access_key_id"] = aws_access_key_id
+        if aws_secret_access_key and "aws_secret_access_key" not in config_defaults:
+            logging.info(f"Passing 'aws_secret_access_key' to 'target-{target_name}'")
+            new_config["aws_secret_access_key"] = aws_secret_access_key
+        if aws_session_token and "aws_session_token" not in config_defaults:
+            logging.info(f"Passing 'aws_session_token' to 'target-{target_name}'")
+            new_config["aws_session_token"] = aws_session_token
+    new_config = _replace_placeholders(new_config, tap_name, table_name, tap_version_num)
+    new_file_path = target_config_file.replace(".json", f"-{table_name}.json")
+    io.create_text_file(new_file_path, json.dumps(new_config))
+    return new_file_path
+
+
+def _replace_placeholders(config_dict, tap_name, table_name, tap_version_num):
+    new_config = config_dict.copy()
+    for setting_name in new_config.keys():
+        for param, replacement_value in {
+            "tap": tap_name,
+            "table": table_name,
+            "version": tap_version_num,
+        }.items():
+            search_key = "{" + f"{param}" + "}"
+            if search_key in new_config[setting_name]:
+                logging.info(
+                    f"Modifying '{setting_name}' setting value, "
+                    f"replacing '{search_key}' placeholder with '{replacement_value}'."
+                )
+                new_config[setting_name] = new_config[setting_name].replace(
+                    search_key, replacement_value
+                )
+    return new_config
+
+
+def _sync_one_table(
+    tap_name: str,
+    table_name: str,
+    config_file: str,
+    target_name: str,
+    target_config_file: str,
+    table_catalog_file: str,
+    table_state_file: str,
+):
+    tap_cmd = f"tap-{tap_name} --config {config_file} --catalog {table_catalog_file}"
+    tap_version_num = "1"  # Not yet supported
+    table_state_file = _replace_placeholders(
+        {"table_state_file": table_state_file}, tap_name, table_name, tap_version_num
+    )["table_state_file"]
+
+    if io.file_exists(table_state_file):
+        local_state_file = io.make_local(table_state_file)
+        tap_cmd += f" --state {local_state_file}"
     else:
-        catalog_file = full_catalog_file
-        state_file = state_file or f"{catalog_dir}/full-extract-state.json"
+        local_state_file = os.path.join(
+            io.get_temp_dir(), f"{tap_name}-{table_name}-state.json"
+        )
+    tmp_target_config = _get_customized_target_config_file(
+        target_name,
+        target_config_file,
+        tap_name=tap_name,
+        table_name=table_name,
+        tap_version_num=tap_version_num,
+    )
     sync_cmd = (
-        f"tap-{tap_name} --config {config_file} --catalog {catalog_file} | "
-        f"target-{target_name} --config {target_config_file} "
-        f">> {state_file}"
+        f"{tap_cmd} | target-{target_name} --config {tmp_target_config} "
+        f">> {local_state_file}"
     )
     jobs.run_command(sync_cmd)
-    # # tail -1 state.json > state.json.tmp && mv state.json.tmp state.json
-
-
-def _get_catalog_table_objects(catalog_file):
-    catalog_full = json.loads(Path(catalog_file).read_text())
-    table_objects = catalog_full["streams"]
-    return sorted(table_objects, key=lambda x: x["stream"])
-
-
-def _get_catalog_table_columns(table_object):
-    return table_object["schema"]["properties"].keys()
+    # TODO: decide whether trimming to only the final line is necessary
+    # tail -1 state.json > state.json.tmp && mv state.json.tmp state.json
+    if local_state_file != table_state_file:
+        io.upload_file(local_state_file, table_state_file)
 
 
 def _table_match_check(match_text: str, select_rules: list):
     selected = False
     for rule in select_rules:
         result = _check_table_rule(match_text, rule)
-        if result == True:
+        if result is True:
             selected = True
-        elif result == False:
+        elif result is False:
             selected = False
     return selected
 
@@ -311,9 +402,9 @@ def _col_match_check(match_text: str, select_rules: list):
     selected = False
     for rule in select_rules:
         result = _check_column_rule(match_text, rule)
-        if result == True:
+        if result is True:
             selected = True
-        elif result == False:
+        elif result is False:
             selected = False
     return selected
 
@@ -343,9 +434,8 @@ def _is_match(value, pattern):
     return False
 
 
-# @logged("checking '{match_text}' against rule '{rule_text}'")
 def _check_column_rule(match_text: str, rule_text: str):
-    """ Checks rule. Returns True to include, False to exclude, or None if not a match """
+    """Check rule. Returns True to include, False to exclude, or None if not a match."""
     if rule_text[0] == "!":
         match_result = False  # Exclude if matched
         rule_text = rule_text[1:]
@@ -370,7 +460,7 @@ def _check_column_rule(match_text: str, rule_text: str):
 
 
 def _check_table_rule(match_text: str, rule_text: str):
-    """ Checks rule. Returns True to include, False to exclude, or None if not a match """
+    """Check rule. Returns True to include, False to exclude, or None if not a match."""
     if rule_text[0] == "!":
         match_result = False  # Exclude if matched
         rule_text = rule_text[1:]
@@ -379,7 +469,7 @@ def _check_table_rule(match_text: str, rule_text: str):
     rule_text = rule_text.replace("**.", "*.*.")
     if "*.*." in rule_text:
         return None  # Global column rules do not apply to tables
-    if match_result == True and rule_text[-2:] == ".*":
+    if match_result is True and rule_text[-2:] == ".*":
         rule_text = rule_text[:-2]
     if len(rule_text.split(".")) > 2:
         return None  # Column rules do not apply to tables
@@ -389,9 +479,7 @@ def _check_table_rule(match_text: str, rule_text: str):
         return None
     if not _is_match(table_name, table_rule):
         return None
-    # logging.info(
-    #     f"Table '{match_text}' matched table filter '{table_rule}' in '{rule_text}'"
-    # )
+    # Table '{match_text}' matched table filter '{table_rule}' in '{rule_text}'"
     return match_result
 
 
@@ -408,7 +496,6 @@ def _create_selected_catalog(
     )
     output_file = output_file or os.path.join(catalog_dir, f"selected-catalog.json")
     catalog_full = json.loads(Path(source_catalog_path).read_text())
-    full_table_list = sorted([tbl["stream"] for tbl in catalog_full["streams"]])
     plan_file = plan_file or _get_plan_file(tap_name)
     plan = yaml.safe_load(io.get_text_file_contents(plan_file))
     included_table_objects = []
@@ -427,13 +514,13 @@ def _create_selected_catalog(
         json.dump(catalog_new, f, indent=2)
 
 
-def _select_table(tbl: object):
+def _select_table(tbl: dict):
     for metadata in tbl["metadata"]:
         if len(metadata["breadcrumb"]) == 0:
             metadata["metadata"]["selected"] = True
 
 
-def _select_table_column(tbl: object, col_name: str, selected: bool):
+def _select_table_column(tbl: dict, col_name: str, selected: bool):
     for metadata in tbl["metadata"]:
         if (
             len(metadata["breadcrumb"]) >= 2
@@ -462,7 +549,6 @@ def _create_single_table_catalog(
     output_file = output_file or os.path.join(catalog_dir, f"{table_name}-catalog.json")
     included_table_objects = []
     catalog_full = json.loads(Path(source_catalog_path).read_text())
-    full_table_list = sorted([tbl["stream"] for tbl in catalog_full["streams"]])
     for tbl in catalog_full["streams"]:
         stream_name = tbl["stream"]
         if stream_name == table_name:
@@ -480,10 +566,9 @@ def _get_docker_tap_image(tap_alias, target_alias=None):
         tap_alias = tap_alias.replace("tap-", "")
     if not target_alias:
         return f"{BASE_DOCKER_IMAGE}:tap-{tap_alias}"
-    else:
-        if target_alias.startswith("target-"):
-            target_alias = target_alias.replace("target-", "")
-        return f"{BASE_DOCKER_IMAGE}:{tap_alias}-to-{target_alias}"
+    if target_alias.startswith("target-"):
+        target_alias = target_alias.replace("target-", "")
+    return f"{BASE_DOCKER_IMAGE}:{tap_alias}-to-{target_alias}"
 
 
 def _rerun_dockerized(tap_alias, target_alias=None):
@@ -493,7 +578,6 @@ def _rerun_dockerized(tap_alias, target_alias=None):
         for k, v in os.environ.items()
         if (k.startswith("TAP_") or k.startswith("TARGET_"))
     }
-    docker_client = docker.from_env()
     image_name = _get_docker_tap_image(tap_alias, target_alias)
     try:
         dockerutils.pull(image_name)
@@ -509,10 +593,10 @@ def _rerun_dockerized(tap_alias, target_alias=None):
             return docker_run_cmd
 
         volumes = {os.path.abspath("."): "/projects/my-project"}
-        DEBUG = True
-        if DEBUG:
+        DEV_DEBUG = False  # Used to test while developing, override python lib path
+        if DEV_DEBUG:
             container_lib = "/usr/local/lib/python3.8/site-packages/slalom"
-            host_lib = "C:\Files\Source\dataops-tools\slalom"
+            host_lib = "C:\\Files\\Source\\dataops-tools\\slalom"
             volumes[host_lib] = container_lib
         docker_run_cmd = _build_docker_run(
             image=image_name,
@@ -521,18 +605,33 @@ def _rerun_dockerized(tap_alias, target_alias=None):
             working_dir="/projects/my-project",
             volumes=volumes,
         )
-        return_code, output_text = jobs.run_command(docker_run_cmd)
+        jobs.run_command(docker_run_cmd)
     return True
 
 
-def build_image(tap_or_plugin_alias, target_alias=None, push=False, pre=False):
+def build_image(
+    tap_or_plugin_alias, target_alias=None, push=False, pre=False, ignore_cache=False
+):
     name, source, alias = _get_plugin_info(f"tap-{tap_or_plugin_alias}")
-    _build_plugin_image(name, source=source, alias=alias, push=push, pre=pre)
+    _build_plugin_image(
+        name, source=source, alias=alias, push=push, pre=pre, ignore_cache=ignore_cache
+    )
     if target_alias:
         name, source, alias = _get_plugin_info(f"target-{target_alias}")
-        _build_plugin_image(name, source=source, alias=alias, push=push, pre=pre)
+        _build_plugin_image(
+            name,
+            source=source,
+            alias=alias,
+            push=push,
+            pre=pre,
+            ignore_cache=ignore_cache,
+        )
         _build_composite_image(
-            tap_alias=tap_or_plugin_alias, target_alias=target_alias, push=push, pre=pre
+            tap_alias=tap_or_plugin_alias,
+            target_alias=target_alias,
+            push=push,
+            pre=pre,
+            ignore_cache=ignore_cache,
         )
 
 
@@ -556,46 +655,71 @@ def _get_plugins_list(plugins_index=None):
     return list_of_tuples
 
 
-def _build_all_standalone(source_image=None, plugins_index=None, push=False, pre=False):
+def _build_all_standalone(
+    source_image=None, plugins_index=None, push=False, pre=False, ignore_cache=False
+):
     plugins = _get_plugins_list(plugins_index)
+    created_images = []
     for name, source, alias in plugins:
-        image_name = _build_plugin_image(
-            name,
-            source=source,
-            alias=alias,
-            source_image=source_image,
-            push=push,
-            pre=pre,
+        created_images.append(
+            _build_plugin_image(
+                name,
+                source=source,
+                alias=alias,
+                source_image=source_image,
+                push=push,
+                pre=pre,
+                ignore_cache=ignore_cache,
+            )
         )
+    return created_images
 
 
-def _get_plugin_info(id, plugins_index=None):
+def _get_plugin_info(plugin_id, plugins_index=None):
     plugins = _get_plugins_list(plugins_index)
     for name, source, alias in plugins:
-        if (alias or name) == id:
+        if (alias or name) == plugin_id:
             return (name, source, alias)
-    raise ValueError(f"Could not file a plugin called '{id}'")
+    raise ValueError(f"Could not file a plugin called '{plugin_id}'")
 
 
-def _build_all_composite(source_image=None, plugins_index=None, push=False, pre=False):
+def _build_all_composite(
+    source_image=None, plugins_index=None, push=False, pre=False, ignore_cache=False
+):
     plugins = _get_plugins_list(plugins_index)
+    created_images = []
     for tap_name, tap_source, tap_alias in plugins:
         tap_alias = tap_alias or tap_name
         for target_name, target_source, target_alias in plugins:
             target_alias = target_alias or target_name
             if tap_alias.startswith("tap-") and target_alias.startswith("target-"):
-                image_name = _build_composite_image(
-                    tap_alias, target_alias, push=push, pre=pre
+                created_images.append(
+                    _build_composite_image(
+                        tap_alias,
+                        target_alias,
+                        push=push,
+                        pre=pre,
+                        ignore_cache=ignore_cache,
+                    )
                 )
+    return created_images
 
 
 def _build_plugin_image(
-    plugin_name, source, alias, source_image=None, push=False, pre=False
+    plugin_name,
+    source,
+    alias,
+    source_image=None,
+    push=False,
+    pre=False,
+    ignore_cache=False,
 ):
     source = source or plugin_name
     alias = alias or plugin_name
     image_name = f"{IMAGE_BASE}:{alias}"
     build_cmd = f"docker build"
+    if ignore_cache:
+        build_cmd += " --no-cache"
     if source_image:
         build_cmd += f" --build-arg source_image={source_image}"
     if pre:
@@ -615,13 +739,17 @@ def _build_plugin_image(
     return image_name
 
 
-def _build_composite_image(tap_alias, target_alias, push=False, pre=False):
+def _build_composite_image(
+    tap_alias, target_alias, push=False, pre=False, ignore_cache=False
+):
     if tap_alias.startswith("tap-"):
         tap_alias = tap_alias.replace("tap-", "", 1)
     if target_alias.startswith("target-"):
         target_alias = target_alias.replace("target-", "", 1)
     image_name = f"{IMAGE_BASE}:{tap_alias}-to-{target_alias}"
     build_cmd = f"docker build"
+    if ignore_cache:
+        build_cmd += " --no-cache"
     if pre:
         build_cmd += " --build-arg source_image_suffix=--pre"
         image_name += "--pre"
@@ -642,14 +770,15 @@ def _push(image_name):
     jobs.run_command(f"docker push {image_name}")
 
 
-def build_all_images(push=False, pre=False):
+def build_all_images(push=False, pre=False, ignore_cache=False):
     """
     Build all images.
+
     :param push: Push images after building
     :param pre: Create and publish pre-release builds
     """
-    _build_all_standalone(push=push, pre=pre)
-    _build_all_composite(push=push, pre=pre)
+    _build_all_standalone(push=push, pre=pre, ignore_cache=ignore_cache)
+    _build_all_composite(push=push, pre=pre, ignore_cache=ignore_cache)
 
 
 def main():

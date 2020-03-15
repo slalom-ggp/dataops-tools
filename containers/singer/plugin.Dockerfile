@@ -6,12 +6,13 @@ ARG prerelease=false
 
 RUN pip install boto3 s3fs
 
+ARG s_tap_version_filter=">=1.1.0.66.dev0"
 RUN if [ "${prerelease}" = "false" ]; then \
-    echo "Installing slalom.dataops libraries... " && \
-    pip install --upgrade slalom.dataops; \
+    echo "Installing slalom.dataops${s_tap_version_filter} libraries... " && \
+    pip install --upgrade slalom.dataops${s_tap_version_filter}; \
     else \
-    echo "Installing pre-release slalom.dataops libraries... " && \
-    pip install --upgrade --pre slalom.dataops; \
+    echo "Installing pre-release slalom.dataops${s_tap_version_filter} libraries... " && \
+    pip install --upgrade --pre slalom.dataops${s_tap_version_filter}; \
     fi
 
 ARG PLUGIN_NAME=tap-pardot

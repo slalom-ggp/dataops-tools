@@ -20,7 +20,8 @@ singer-taps:
 
 singer-targets:
   - { name: target-redshift }
-  - { name: target-s3-csv, source: pipelinewise-target-s3-csv }
+  # - { name: target-s3-csv, source: pipelinewise-target-s3-csv } # Pending PR: https://github.com/transferwise/pipelinewise-target-s3-csv/pull/13
+  - { name: target-s3-csv, source: "git+https://github.com/aaronsteers/pipelinewise-target-s3-csv.git@feat/aws-access-token" }
   - { name: target-csv }
   - { name: target-snowflake }
 
