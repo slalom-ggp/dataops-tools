@@ -1,0 +1,155 @@
+#!/usr/bin/env python3.6
+
+# A sample training component that trains a simple scikit-learn decision tree model.
+# This implementation works in File mode and makes no assumptions about the input file names.
+# Input is specified as CSV with a data point in each row and the labels in the first column.
+
+from __future__ import print_function
+
+import os
+import json
+import pickle
+import sys
+import traceback
+
+import pandas as pd
+import sklearn.model_selection as skms
+
+import xgboost as xgb
+import shap
+
+# These are the paths to where SageMaker mounts interesting things in your container.
+
+prefix = "/opt/ml/"
+
+input_path = prefix + "input/data"
+output_path = os.path.join(prefix, "output")
+model_path = os.path.join(prefix, "model")
+
+# This algorithm has a single channel of input data called 'training'. Since we run in
+# File mode, the input files are copied to the directory specified here.
+channel_name = "training"
+training_path = os.path.join(input_path, channel_name)
+
+# The function to execute the training.
+def train():
+    print("Starting the training.")
+    try:
+
+        # Take the set of files and read them all into a single pandas dataframe
+        input_files = [
+            os.path.join(training_path, file) for file in os.listdir(training_path)
+        ]
+        if len(input_files) == 0:
+            raise ValueError(
+                (
+                    "There are no files in {}.\n"
+                    + "This usually indicates that the channel ({}) was incorrectly specified,\n"
+                    + "the data specification in S3 was incorrectly specified or the role specified\n"
+                    + "does not have permission to access the data."
+                ).format(training_path, channel_name)
+            )
+        raw_data = [pd.read_csv(file, index_col=0) for file in input_files]
+        train_data = pd.concat(raw_data)
+
+        # labels are in the first column
+        train_y = train_data.iloc[:, 0]
+        train_X = train_data.iloc[:, 1:]
+
+        # Now use xgboost to train the model.
+        scorings = (
+            "roc_auc",
+            "accuracy",
+            "balanced_accuracy",
+            "precision",
+            "recall",
+            "f1",
+        )
+
+        params = {
+            "base_score": 0.5,
+            "booster": "gbtree",
+            "missing": None,
+            "n_jobs": 1,
+            "nthread": None,
+            "objective": "binary:logistic",
+            "random_state": 0,
+            "silent": True,
+            "reg_alpha": 0,
+            "reg_lambda": 1,
+        }
+
+        # Usually max_delta_step is not needed, but it might help in logistic regression when class is extremely imbalanced.
+        param_grid = {
+            "gamma": [0],
+            "max_depth": [3],
+            "min_child_weight": [1],
+            "subsample": [0.5],
+            "max_delta_step": [0],
+            "scale_pos_weight": [1],
+        }
+
+        inner_cv = skms.StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
+        outer_cv = skms.StratifiedKFold(n_splits=10, random_state=1, shuffle=True)
+
+        booster = xgb.XGBClassifier(**params)
+        scorings = (
+            "roc_auc",
+            "accuracy",
+            "balanced_accuracy",
+            "precision",
+            "recall",
+            "f1",
+        )
+        # should multi-thread only in the inner CV, not outer CV. otherwise it takes forever and does nothing.
+        gridsearch_clf = skms.GridSearchCV(
+            booster, param_grid, cv=inner_cv, scoring="f1", verbose=0, n_jobs=5
+        )
+        cv_results = skms.cross_validate(
+            gridsearch_clf,
+            X=train_X,
+            y=train_y,
+            scoring=scorings,
+            cv=outer_cv,
+            return_estimator=True,
+            return_train_score=True,
+            verbose=1,
+            n_jobs=None,
+        )
+
+        chosen_clf = cv_results["estimator"][
+            cv_results["test_balanced_accuracy"].argmax()
+        ]
+
+        # return shap values
+        explainer = shap.TreeExplainer(chosen_clf.best_estimator_)
+        shap_values = explainer.shap_values(train_X)
+
+        # save viz data
+        df_shap = pd.DataFrame(
+            data=shap_values, index=train_data.index, columns=train_X.columns
+        )
+        df_shap.to_csv(os.path.join(model_path, "shap.csv"))
+
+        # save the model
+        with open(os.path.join(model_path, "xgboost-model.pkl"), "wb") as out:
+            pickle.dump(chosen_clf.best_estimator_, out, protocol=0)
+            print("Training complete.")
+
+    except Exception as e:
+        # Write out an error file. This will be returned as the failureReason in the
+        # DescribeTrainingJob result.
+        trc = traceback.format_exc()
+        with open(os.path.join(output_path, "failure"), "w") as s:
+            s.write("Exception during training: " + str(e) + "\n" + trc)
+        # Printing this causes the exception to be in the training job logs, as well.
+        print("Exception during training: " + str(e) + "\n" + trc, file=sys.stderr)
+        # A non-zero exit code causes the training job to be marked as Failed.
+        sys.exit(255)
+
+
+if __name__ == "__main__":
+    train()
+
+    # A zero exit code causes the job to be marked a Succeeded.
+    sys.exit(0)
