@@ -14,6 +14,7 @@ import traceback
 
 import pandas as pd
 import sklearn.model_selection as skms
+import numpy as np
 
 import xgboost as xgb
 import shap
@@ -23,13 +24,14 @@ import shap
 prefix = "/opt/ml/"
 
 input_path = prefix + "input/data"
+hyperparams_path = prefix + "input/config/hyperparameters.json"
 output_path = os.path.join(prefix, "output")
 model_path = os.path.join(prefix, "model")
 
-# This algorithm has a single channel of input data called 'training'. Since we run in
+# This algorithm has a single channel of input data called 'train'. Since we run in
 # File mode, the input files are copied to the directory specified here.
-channel_name = "training"
-training_path = os.path.join(input_path, channel_name)
+channel_name = "train"
+train_path = os.path.join(input_path, channel_name)
 
 # The function to execute the training.
 def train():
@@ -38,7 +40,7 @@ def train():
 
         # Take the set of files and read them all into a single pandas dataframe
         input_files = [
-            os.path.join(training_path, file) for file in os.listdir(training_path)
+            os.path.join(train_path, file) for file in os.listdir(train_path)
         ]
         if len(input_files) == 0:
             raise ValueError(
@@ -47,7 +49,7 @@ def train():
                     + "This usually indicates that the channel ({}) was incorrectly specified,\n"
                     + "the data specification in S3 was incorrectly specified or the role specified\n"
                     + "does not have permission to access the data."
-                ).format(training_path, channel_name)
+                ).format(train_path, channel_name)
             )
         raw_data = [pd.read_csv(file, index_col=0) for file in input_files]
         train_data = pd.concat(raw_data)
@@ -56,73 +58,68 @@ def train():
         train_y = train_data.iloc[:, 0]
         train_X = train_data.iloc[:, 1:]
 
-        # Now use xgboost to train the model.
-        scorings = (
-            "roc_auc",
-            "accuracy",
-            "balanced_accuracy",
-            "precision",
-            "recall",
-            "f1",
-        )
-
-        params = {
-            "base_score": 0.5,
-            "booster": "gbtree",
-            "missing": None,
-            "n_jobs": 1,
-            "nthread": None,
-            "objective": "binary:logistic",
-            "random_state": 0,
-            "silent": True,
-            "reg_alpha": 0,
-            "reg_lambda": 1,
-        }
+        # Read the hyperparameter config json file
+        with open(hyperparams_path) as _in_file:
+            hyperparams_dict = json.load(_in_file)
 
         # Usually max_delta_step is not needed, but it might help in logistic regression when class is extremely imbalanced.
-        param_grid = {
-            "gamma": [0],
-            "max_depth": [3],
-            "min_child_weight": [1],
-            "subsample": [0.5],
-            "max_delta_step": [0],
-            "scale_pos_weight": [1],
+        params = {
+            'base_score': 0.5, 
+            'booster': 'gbtree', 
+            'missing': None, 
+            'n_jobs': 1, 
+            'nthread': None,
+            'objective': 'binary:logistic', 
+            'random_state': 0, 
+            'silent': True, 
+            'reg_alpha': 0, 
+            'reg_lambda': 1, 
+            #hyperparameters
+            "gamma": float(hyperparams_dict['gamma']),
+            "max_depth": int(hyperparams_dict['max_depth']),
+            "min_child_weight": float(hyperparams_dict['min_child_weight']),
+            "subsample": float(hyperparams_dict['subsample']),
+            "max_delta_step": float(hyperparams_dict['max_delta_step']),
+            "scale_pos_weight": float(hyperparams_dict['scale_pos_weight'])
         }
 
-        inner_cv = skms.StratifiedKFold(n_splits=10, random_state=42, shuffle=True)
-        outer_cv = skms.StratifiedKFold(n_splits=10, random_state=1, shuffle=True)
+        cv = skms.StratifiedKFold(n_splits=int(hyperparams_dict['kfold_splits']), random_state=1, shuffle=True)
 
         booster = xgb.XGBClassifier(**params)
-        scorings = (
-            "roc_auc",
-            "accuracy",
-            "balanced_accuracy",
-            "precision",
-            "recall",
-            "f1",
-        )
-        # should multi-thread only in the inner CV, not outer CV. otherwise it takes forever and does nothing.
-        gridsearch_clf = skms.GridSearchCV(
-            booster, param_grid, cv=inner_cv, scoring="f1", verbose=0, n_jobs=5
-        )
+        scorings = ("roc_auc","accuracy","precision","recall","f1",)
+
         cv_results = skms.cross_validate(
-            gridsearch_clf,
+            booster,
             X=train_X,
             y=train_y,
             scoring=scorings,
-            cv=outer_cv,
+            cv=cv,
             return_estimator=True,
             return_train_score=True,
             verbose=1,
             n_jobs=None,
         )
 
-        chosen_clf = cv_results["estimator"][
-            cv_results["test_balanced_accuracy"].argmax()
-        ]
+        # Log the objective metric name with its calculated value. In tis example is Precision.
+        # The objective name should be exactly the same with the one specified in the hyperparams congig json file.
+        # The value must be a numeric (float or int).
+        roc_auc = np.mean(cv_results['test_roc_auc'])
+        accuracy = np.mean(cv_results['test_accuracy'])
+        precision = np.mean(cv_results['test_precision'])
+        recall = np.mean(cv_results['test_recall'])
+        f1 = np.mean(cv_results['test_f1'])
+        
+        print("{}: {}".format('roc_auc', roc_auc))
+        print("{}: {}".format('accuracy', accuracy))
+        print("{}: {}".format('precision', precision))
+        print("{}: {}".format('recall', recall))
+        print("{}: {}".format('f1', f1))
+
+        # train model on whole dataset
+        clf = booster.fit(X=train_X, y=train_y)
 
         # return shap values
-        explainer = shap.TreeExplainer(chosen_clf.best_estimator_)
+        explainer = shap.TreeExplainer(clf)
         shap_values = explainer.shap_values(train_X)
 
         # save viz data
@@ -133,7 +130,7 @@ def train():
 
         # save the model
         with open(os.path.join(model_path, "xgboost-model.pkl"), "wb") as out:
-            pickle.dump(chosen_clf.best_estimator_, out, protocol=0)
+            pickle.dump(clf, out, protocol=0)
             print("Training complete.")
 
     except Exception as e:
