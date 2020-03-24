@@ -118,16 +118,6 @@ def train():
         # train model on whole dataset
         clf = booster.fit(X=train_X, y=train_y)
 
-        # return shap values
-        explainer = shap.TreeExplainer(clf)
-        shap_values = explainer.shap_values(train_X)
-
-        # save viz data
-        df_shap = pd.DataFrame(
-            data=shap_values, index=train_data.index, columns=train_X.columns
-        )
-        df_shap.to_csv(os.path.join(model_path, "shap.csv"))
-
         # save the model
         with open(os.path.join(model_path, "xgboost-model.pkl"), "wb") as out:
             pickle.dump(clf, out, protocol=0)

@@ -15,6 +15,7 @@ import flask
 
 import pandas as pd
 import xgboost
+import shap
 
 prefix = "/opt/ml/"
 model_path = os.path.join(prefix, "model")
@@ -42,7 +43,19 @@ class ScoringService(object):
             input (a pandas dataframe): The data on which to do the predictions. There will be
                 one prediction per row in the dataframe"""
         clf = cls.get_model()
-        return clf.predict(input)
+        return clf.predict_proba(input)
+
+    @classmethod
+    def shap(cls, input):
+        """For the input, do the predictions and return them.
+
+        Args:
+            input (a pandas dataframe): The data on which to do the predictions. There will be
+                one prediction per row in the dataframe"""
+        clf = cls.get_model()
+        # return shap values
+        explainer = shap.TreeExplainer(clf)
+        return explainer.shap_values(input)
 
 
 # The flask app for serving predictions
@@ -84,9 +97,15 @@ def transformation():
     # Do the prediction
     predictions = ScoringService.predict(data)
 
+    # Save viz data
+    shap_values = ScoringService.shap(data)
+    df_shap = pd.DataFrame(
+        data=shap_values, index=data.index, columns=data.columns
+    )
+
     # Convert from numpy back to CSV
     out = StringIO()
-    pd.DataFrame({"Results": predictions}, index=data.index).to_csv(
+    pd.DataFrame({"Prediction": predictions[:,1]}, index=data.index).join(df_shap).to_csv(
         out, header=True, index=True
     )
     result = out.getvalue()
