@@ -141,6 +141,14 @@ DOCS_HEADER = """
 DOCS_FOOTER = """
 ---------------------
 
+## Source Files
+
+_Source code for this module is available using the links below._
+
+{src}
+
+---------------------
+
 _**NOTE:** This documentation was auto-generated using
 `terraform-docs` and `s-infra` from `slalom.dataops`.
 Please do not attempt to manually update this file._
@@ -181,7 +189,9 @@ def update_module_docs(
     if ".git" not in tf_dir and ".terraform" not in tf_dir:
         tf_files = [x for x in io.list_files(tf_dir) if x.endswith(".tf")]
         extra_docs = [
-            x for x in io.list_files(tf_dir) if extra_docs_names and x in extra_docs_names
+            x
+            for x in io.list_files(tf_dir)
+            if extra_docs_names and os.path.basename(x) in extra_docs_names
         ]
         if tf_files:
             module_title = _proper(
@@ -203,17 +213,17 @@ def update_module_docs(
                     module_title=module_title, module_path=module_path
                 )
             markdown_text += markdown_output
-            markdown_text += "\n\n##Source Code Files:\n\n* "
-            markdown_text += "\n* ".join(
-                ["* [{tf_file}]({tf_file})" for tf_file in tf_files]
-            )
-            markdown_text += "\n\n"
             for extra_file in extra_docs:
-                extra_filepath = f"{tf_dir}/{extra_file}"
-                if os.path.isfile(extra_filepath):
-                    markdown_text += io.get_text_file_contents(extra_filepath) + "\n"
+                markdown_text += io.get_text_file_contents(extra_file) + "\n"
             if footer:
-                markdown_text += DOCS_FOOTER
+                markdown_text += DOCS_FOOTER.format(
+                    src="\n".join(
+                        [
+                            "* [{f}]({f})".format(f=os.path.basename(tf_file))
+                            for tf_file in tf_files
+                        ]
+                    )
+                )
             io.create_text_file(f"{tf_dir}/{readme}", markdown_text)
     if recursive:
         for folder in io.list_files(tf_dir):
