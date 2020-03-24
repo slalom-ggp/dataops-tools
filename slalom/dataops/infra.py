@@ -149,11 +149,13 @@ Please do not attempt to manually update this file._
 
 def update_module_docs(
     tf_dir: str,
+    *,
     recursive: bool = True,
     readme: str = "README.md",
     footer: bool = True,
     header: bool = True,
     special_case_words: List[str] = None,
+    extra_docs_names: List[str] = ["USAGE.md", "NOTES.md"],
     git_repo: str = "https://github.com/slalom-ggp/dataops-infra",
 ):
     """
@@ -167,6 +169,8 @@ def update_module_docs(
     readme : Optional (default="README.md"). The filename to create when generating docs.
     footnote: Optional (default=True). 'True' to include the standard footnote.
     special_case_words: Optional. A list of words to override special casing rules.
+    extra_docs_names: (Optional.) A list of filenames which, if found, will be appended
+      to each module's README.md file.
     git_repo: Optional. The git repo path to use in rendering 'source' paths.
 
     Returns:
@@ -175,7 +179,11 @@ def update_module_docs(
     """
     markdown_text = ""
     if ".git" not in tf_dir and ".terraform" not in tf_dir:
-        if [x for x in io.list_files(tf_dir) if x.endswith(".tf")]:
+        tf_files = [x for x in io.list_files(tf_dir) if x.endswith(".tf")]
+        extra_docs = [
+            x for x in io.list_files(tf_dir) if extra_docs_names and x in extra_docs_names
+        ]
+        if tf_files:
             module_title = _proper(
                 os.path.basename(tf_dir), special_case_words=special_case_words
             )
@@ -195,7 +203,12 @@ def update_module_docs(
                     module_title=module_title, module_path=module_path
                 )
             markdown_text += markdown_output
-            for extra_file in ["NOTES.md"]:
+            markdown_text += "\n\n##Source Code Files:\n\n* "
+            markdown_text += "\n* ".join(
+                ["* [{tf_file}]({tf_file})" for tf_file in tf_files]
+            )
+            markdown_text += "\n\n"
+            for extra_file in extra_docs:
                 extra_filepath = f"{tf_dir}/{extra_file}"
                 if os.path.isfile(extra_filepath):
                     markdown_text += io.get_text_file_contents(extra_filepath) + "\n"
