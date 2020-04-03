@@ -235,7 +235,7 @@ def _pick_cloud_function(filepath, s3_fn, adl_fn, git_fn=None, else_fn=None):
         fn = else_fn
     if not fn:
         raise NotImplementedError(
-            "Could not pick cloud function given filepath '{filepath}'"
+            f"Could not pick cloud function given filepath '{filepath}' "
             "and provided function map {"
             f"'s3': '{s3_fn}', 'adl': '{adl_fn}', 'git': '{git_fn}', 'else': '{else_fn}'"
             "}"
