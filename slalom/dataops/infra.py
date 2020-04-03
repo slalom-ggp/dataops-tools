@@ -355,7 +355,7 @@ def check_tf_metadata(
     return result_str
 
 
-def change_upstream_source(
+def update_catalog_source(
     dir_to_update=".",
     git_repo="https://github.com/slalom-ggp/dataops-infra",
     branch="master",
@@ -403,6 +403,16 @@ def change_upstream_source(
         jobs.run_command("terraform fmt -recursive", dir_to_update)
 
 
+def deprecated(fn, msg):
+    """Wrapper for deprecated function. Return the function after printing warning."""
+
+    def _fn(*args, **kwargs):
+        logging.warning(f"Deprecation warning: {msg}")
+        _fn(*args, **kwargs)
+
+    return _fn
+
+
 def main():
     fire.Fire(
         {
@@ -411,7 +421,14 @@ def main():
             "apply": apply,
             "init+apply": init_and_apply,
             "deploy": init_and_apply,
-            "change_upstream_source": change_upstream_source,
+            "update_catalog_source": update_catalog_source,
+            "change_upstream_source": deprecated(
+                update_catalog_source,
+                msg=(
+                    "Command 'update_catalog_source' is deprecated. "
+                    "Please use 'update_catalog_source' instead."
+                ),
+            ),
             "update_module_docs": update_module_docs,
             "get_tf_metadata": get_tf_metadata,
             "check_tf_metadata": check_tf_metadata,
