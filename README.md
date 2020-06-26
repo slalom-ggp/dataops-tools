@@ -22,7 +22,17 @@ After installing via pip, you will have access to the following command line too
 | `s-docker` | Run Docker and ECS commands.                                                                                             |
 | `s-infra`  | Run Terraform IAC (Infrastructure-as-Code) automation.                                                                   |
 | `s-io`     | Read and write files from a variety of cloud platforms (full support for S3, Azure, and Git as if they were local paths. |
-| `s-tap`    | Automates extraction using the open source Singer taps platform (www.singer.io)                                          |
+| `s-tap`    | Deprecated. Please see the spinoff [tapdance](https://github.com/aaronsteers/tapdance) library mentioned below. Automates extraction using the open source Singer taps platform (www.singer.io).                                          |
+
+## Spin off Projects
+
+> NOTE: Rather than maintain a single monolithic repo, some child projects have spun off from this one.
+
+Here is a list of the current spinoff projects:
+
+* **[dock-r]()** - Automates docker functions in an easy-to-user wrapper. (Replaces `s-docker`.)
+* **[tapdance]()** - Automates data extract-load features using the open source Singer taps platform (www.singer.io). (Replaces `s-tap`.)
+* **[uio]()** - A universal file IO library which can read from and write to any path (e.g. S3, Azure, local, or Github) using a single unified interface regardless of provider. (Replaces `s-io`.)
 
 ## Testing
 
