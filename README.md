@@ -30,9 +30,9 @@ After installing via pip, you will have access to the following command line too
 
 Here is a list of the current spinoff projects:
 
-* **[dock-r]()** - Automates docker functions in an easy-to-user wrapper. (Replaces `s-docker`.)
-* **[tapdance]()** - Automates data extract-load features using the open source Singer taps platform (www.singer.io). (Replaces `s-tap`.)
-* **[uio]()** - A universal file IO library which can read from and write to any path (e.g. S3, Azure, local, or Github) using a single unified interface regardless of provider. (Replaces `s-io`.)
+* **[dock-r](https://github.com/aaronsteers/dock-r)** - Automates docker functions in an easy-to-user wrapper. (Replaces `s-docker`.)
+* **[tapdance](https://github.com/aaronsteers/tapdance)** - Automates data extract-load features using the open source Singer taps platform (www.singer.io). (Replaces `s-tap`.)
+* **[uio](https://github.com/aaronsteers/uio)** - A universal file IO library which can read from and write to any path (e.g. S3, Azure, local, or Github) using a single unified interface regardless of provider. (Replaces `s-io`.)
 
 ## Testing
 
