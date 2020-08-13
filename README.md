@@ -18,11 +18,12 @@ After installing via pip, you will have access to the following command line too
 
 | Command    | Description                                                                                                              |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `s-spark`  | Run Spark programs and Jupyter notebooks (natively, containerized via docker, or remotely via ECS).                      |
+| `s-anon`   | Run anonymization functions against a data file.                                                                         |
 | `s-docker` | Run Docker and ECS commands.                                                                                             |
 | `s-infra`  | Run Terraform IAC (Infrastructure-as-Code) automation.                                                                   |
 | `s-io`     | Read and write files from a variety of cloud platforms (full support for S3, Azure, and Git as if they were local paths. |
-| `s-tap`    | Deprecated. Please see the spinoff [tapdance](https://github.com/aaronsteers/tapdance) library mentioned below. Automates extraction using the open source Singer taps platform (www.singer.io).                                          |
+| `s-spark`  | Run Spark programs and Jupyter notebooks (natively, containerized via docker, or remotely via ECS).                      |
+| `s-tap`    | Deprecated. Please see the spinoff [tapdance](https://github.com/aaronsteers/tapdance) library mentioned below.          |
 
 ## Spin off Projects
 
@@ -33,6 +34,69 @@ Here is a list of the current spinoff projects:
 * **[dock-r](https://github.com/aaronsteers/dock-r)** - Automates docker functions in an easy-to-user wrapper. (Replaces `s-docker`.)
 * **[tapdance](https://github.com/aaronsteers/tapdance)** - Automates data extract-load features using the open source Singer taps platform (www.singer.io). (Replaces `s-tap`.)
 * **[uio](https://github.com/aaronsteers/uio)** - A universal file IO library which can read from and write to any path (e.g. S3, Azure, local, or Github) using a single unified interface regardless of provider. (Replaces `s-io`.)
+
+## Running the Excel anonymization process
+
+This process will hash the first column of the provided CSV or Excel file.
+
+The output will be saved as a new anonymized version of the file.
+
+Usage Guidelines:
+
+1. File should be in Excel format, with a single sheet.
+2. The first column in the Excel sheet should contain the ID to anonymize.
+3. Currently supported hashing functions are: MD5, SHA256, and SHA512
+4. **NOTE:** Always open and review the file to confirm that the anonymization process
+   was successful.
+
+### Installing extra libraries
+
+In order to run the anonymization process, you may require some additional components. To install slalom dataops,
+along with the needed libraries (specifically, Pandas and Excel), run the following from any admin prompt.
+
+```cmd
+pip install slalom.dataops[Pandas]
+```
+
+Syntax:
+
+```md
+SYNOPSIS
+    s-anon anonymize FILEPATH [[--hash_key=]HASH_KEY] [[--hash_function=]HASH_FUNCTION]
+
+DESCRIPTION
+    The output will be saved as a new anonymized version of the file.
+
+    Usage Guidelines:
+
+    1. File should be in Excel format, with a single sheet.
+    2. The first column in the Excel sheet should contain the ID to anonymize.
+    3. Currently supported hashing functions are: MD5, SHA256, and SHA512
+    4. **NOTE:** Always open and review the file to confirm that the anonymization process
+       was successful.
+
+POSITIONAL ARGUMENTS
+    FILEPATH
+        The path to the file to be anonymized.
+
+FLAGS
+    --hash_key=HASH_KEY
+        A hash key to be used as a seed during anonymization.
+    --hash_function=HASH_FUNCTION
+        The hashing function to use, by default "MD5"
+```
+
+Sample:
+
+```cmd
+s-anon anonymize path/to/file.xlsx --hash_key=MySuperSecretAnonymizationSeed --hash_function=SHA256
+```
+
+Or equivalently:
+
+```cmd
+s-anon anonymize path/to/file.xlsx MySuperSecretAnonymizationSeed SHA256
+```
 
 ## Testing
 

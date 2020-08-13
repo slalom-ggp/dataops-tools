@@ -2,7 +2,8 @@
 # debugging from inside a container (not on your local dev machine).
 
 awscli
-azure
+azure-storage-blob
+azure-storage-file-datalake
 boto3
 docker
 fire

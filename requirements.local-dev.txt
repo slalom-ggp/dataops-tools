@@ -2,7 +2,8 @@
 # debugging from your local dev machine (not inside a container).
 
 awscli
-azure
+azure-storage-blob
+azure-storage-file-datalake
 docker
 fire
 joblib

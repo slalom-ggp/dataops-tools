@@ -390,7 +390,10 @@ def change_upstream_source(
                             new_path = git_pattern.format(
                                 git_repo=git_repo, path=module_path, branch=branch
                             )
-                        print(f"{current_path} \n\t\t\t>> {new_path}")
+                        if current_path == new_path:
+                            print(f"{current_path} \n\t\t\t-> (unchanged)")
+                        else:
+                            print(f"{current_path} \n\t\t\t-> {new_path}")
                         new_line = f'  source = "{new_path}"'
                 new_lines.append(new_line)
             new_file_text = "\n".join(new_lines)

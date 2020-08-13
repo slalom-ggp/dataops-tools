@@ -43,7 +43,7 @@ setup(
             "s-infra = slalom.dataops.infra:main",
             "s-io = slalom.dataops.io:main",
             "s-spark = slalom.dataops.sparkutils:main",
-            "s-tap = slalom.dataops.taputils:main",
+            "s-anon = slalom.dataops.anon:main",
         ]
     },
     include_package_data=True,
@@ -59,9 +59,9 @@ setup(
     ],
     extras_require={
         "AWS": ["awscli", "boto3", "s3fs"],
-        "Azure": ["azure"],
-        "Pandas": ["pandas"],
         "S3": ["boto3", "s3fs"],
+        "Azure": ["azure-storage-blob", "azure-storage-file-datalake"],
+        "Pandas": ["pandas", "lxrd", "openpyxl"],
         "Spark": ["pyspark"],
     },
     classifiers=[
