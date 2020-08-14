@@ -17,7 +17,7 @@ except ImportError as ex:
 HASH_FUNCTIONS = {"MD5": hashlib.md5, "SHA256": hashlib.sha256, "SHA512": hashlib.sha512}
 
 
-def anonymize_file(filepath: str, hash_key: str = None, hash_function: str = "MD5"):
+def anonymize_file(filepath: str, hash_key: str, hash_function: str = "MD5"):
     """
     Hashes the first column of the provided CSV or Excel file.
 
@@ -51,6 +51,12 @@ def anonymize_file(filepath: str, hash_key: str = None, hash_function: str = "MD
         raise ValueError(
             f"Unsupported hash function {hash_function}. "
             f"Expected one of : {HASH_FUNCTIONS.keys()}"
+        )
+    if hash_key.upper() in HASH_FUNCTIONS.keys():
+        raise ValueError(
+            f"A hash algorithm was attempted to be passed as the encryption function. "
+            f"Please check the syntax for a missing encryption key and try again."
+            f"Details: hash key cannot be one of : {HASH_FUNCTIONS.keys()}"
         )
     if not uio.file_exists(filepath):
         raise FileExistsError(f"Could not find file {filepath}")
