@@ -3,24 +3,22 @@
 import datetime
 from distutils.util import strtobool
 import hashlib
-import inspect
+
+# import inspect
 import os
 from pathlib import Path
-import platform
-import subprocess
 import sys
 import tempfile
 import time
 
-import fire
+from logless import logged, get_logger, flush_buffers
+import runnow
+import uio
 
 sys.path.append("../src/")
 if __name__ == "__main__" and __package__ is None:
     repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.append(os.path.join(repo_dir, "src"))
-
-from slalom.dataops.logs import logged, get_logger, fstr, flush_all_output
-from slalom.dataops import io
 
 
 logging = get_logger("slalom.dataops")
@@ -76,7 +74,7 @@ def get_all_script_files(*scripts_folders):
 def replicate_cache(source_folder, target_folder):
     if source_folder != target_folder:
         copied_files = []
-        source_files = io.list_s3_files(os.path.join(source_folder, ""))
+        source_files = uio.list_s3_files(os.path.join(source_folder, ""))
         for source_file in source_files:
             if not source_file in [
                 source_folder + "/_SUCCESS",
@@ -95,7 +93,7 @@ def replicate_cache(source_folder, target_folder):
                         f"contained in '{target_file}'"
                     )
                 logging.debug(f"Replicating file cache: {source_file}->{target_file}")
-                io.copy_s3_file(source_file, target_file)
+                uio.copy_s3_file(source_file, target_file)
                 copied_files.append(target_file)
         return copied_files
     else:
@@ -151,20 +149,20 @@ def generate_script_output(
             parent_cache_folder = get_cache_folder_path(parent_hash)
         if save_cache:
             new_cache_folder = get_cache_folder_path(new_running_hash)
-        if use_cache and io.file_exists(os.path.join(new_cache_folder, "_SUCCESS")):
+        if use_cache and uio.file_exists(os.path.join(new_cache_folder, "_SUCCESS")):
             logging.info(
                 f"Skipping '{script_file_path}' execution "
                 f"and using cache from {new_cache_folder}"
             )
             prev_log_path = os.path.join(new_cache_folder, "logs", log_file_name)
-            if io.file_exists(prev_log_path):
-                io.download_s3_file(prev_log_path, log_file_path)
-                flush_all_output()
+            if uio.file_exists(prev_log_path):
+                uio.download_s3_file(prev_log_path, log_file_path)
+                flush_buffers()
                 with open(log_file_path, "rU", encoding="utf-8") as prev_log:
                     sys.stdout.write(
                         "\n".join(["|| " + l.rstrip() for l in prev_log.readlines()])
                     )
-                flush_all_output()
+                flush_buffers()
             if replicate_cache_if_skipped:
                 replicate_cache(new_cache_folder, batch_output_dir)
             else:
@@ -176,7 +174,7 @@ def generate_script_output(
             if (
                 use_cache
                 and parent_cache_folder
-                and io.file_exists(os.path.join(parent_cache_folder, "_SUCCESS"))
+                and uio.file_exists(os.path.join(parent_cache_folder, "_SUCCESS"))
             ):
                 logging.debug(
                     f"Found usable cache for '{script_file_path}' "
@@ -195,14 +193,14 @@ def generate_script_output(
                 f"{'-' * 80}\n"
                 f"{'-' * 80}\n\n"
             )
-            return_code, output_text = run_command(
+            return_code, output_text = runnow.run(
                 cmd,
                 raise_error=True,
                 log_file_path=log_file_path,
                 echo=True,
                 shell=cli_shell,
             )
-            io.create_s3_text_file(
+            uio.create_s3_text_file(
                 os.path.join(work_dir, "logs", log_file_name), contents=output_text
             )
             logging.debug(f"Script execution completed.")
@@ -211,7 +209,7 @@ def generate_script_output(
             elif save_cache:
                 replicate_cache(work_dir, new_cache_folder)
             if save_cache:
-                io.create_s3_text_file(
+                uio.create_s3_text_file(
                     os.path.join(new_cache_folder, "_SUCCESS"), contents=""
                 )
         return new_running_hash
@@ -228,111 +226,6 @@ def _grep(full_text, match_with, insensitive=True, fn=any):
         )
     else:
         return "\n".join([l for l in lines if fn([m in l for m in match_with])])
-
-
-@logged("running command: {'(hidden)' if hide else cmd}")
-def run_command(
-    cmd: str,
-    working_dir=None,
-    echo=True,
-    raise_error=True,
-    log_file_path: str = None,
-    shell=True,
-    daemon=False,
-    hide=False,
-    cwd=None,
-    wait_test=None,
-    wait_max=None,
-):
-    """ Run a CLI command and return a tuple: (return_code, output_text) """
-    loglines = []
-    if working_dir:
-        prev_working_dir = os.getcwd()
-        os.chdir(working_dir)
-    if isinstance(cmd, list):
-        pass  # cmd = " ".join(cmd)
-    elif platform.system() == "Windows":
-        cmd = " ".join(cmd.split())
-    else:
-        cmd = cmd.replace("\n", " \\\n")
-    proc = subprocess.Popen(
-        cmd,
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-        universal_newlines=True,
-        shell=shell,
-        cwd=cwd,
-    )
-    start_time = time.time()
-    if working_dir:
-        os.chdir(prev_working_dir)
-    if log_file_path:
-        logfile = open(log_file_path, "w", encoding="utf-8")
-    else:
-        logfile = None
-    line = proc.stdout.readline()
-    flush_all_output()
-    while (proc.poll() is None) or line:
-        if daemon:
-            if wait_max is None and wait_test is None:
-                logging.info("Daemon process is launched. Returning...")
-                break
-            if callable(wait_test) and wait_test(line):
-                logging.info(f"Returning. Wait test passed: {line}")
-                break
-            if wait_max and time.time() >= start_time + wait_max:
-                logging.info(
-                    f"{line}\nMax timeout expired (wait_max={wait_max})."
-                    f" Returning..."
-                )
-                if callable(wait_test):
-                    return_code = 1
-                else:
-                    return_code = 0
-                break
-        if line:
-            line = line.rstrip()
-            loglines.append(line)
-            if echo:
-                for l in line.splitlines():
-                    sys.stdout.write(l.rstrip() + "\r\n")
-            if logfile:
-                logfile.write(line + "\n")
-        else:
-            time.sleep(0.5)  # Sleep half a second if no new output
-        line = proc.stdout.readline()
-    flush_all_output()
-    output_text = chr(10).join(loglines)
-    if logfile:
-        logfile.close()
-    if not proc:
-        return_code = None
-        raise RuntimeError(f"Command failed: {cmd}\n\n")
-    else:
-        return_code = proc.returncode
-        if (
-            return_code != 0
-            and raise_error
-            and ((daemon == False) or (return_code is not None))
-        ):
-            err_msg = f"Command failed (exit code {return_code}): {cmd}"
-            if not echo:
-                print_str = output_text
-            elif len(output_text.splitlines()) > 10:
-                print_str = _grep(
-                    output_text, ["error", "exception", "warning", "fail", "deprecat"]
-                )
-            else:
-                print_str = ""
-            if print_str:
-                err_msg += (
-                    f"{'-' * 80}\n"
-                    f"SCRIPT ERRORS:\n{'-' * 80}\n"
-                    f"{print_str}\n{'-' * 80}\n"
-                    f"END OF SCRIPT OUTPUT\n{'-' * 80}"
-                )
-            raise RuntimeError(err_msg)
-    return return_code, output_text
 
 
 def get_cache_folder_path(code_hash):

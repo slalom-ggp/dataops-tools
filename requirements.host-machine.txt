@@ -6,8 +6,10 @@ azure-storage-blob
 azure-storage-file-datalake
 boto3
 docker
+dock-r
 fire
 junit-xml
-psutil
+logless
 s3fs
+uio
 xmlrunner

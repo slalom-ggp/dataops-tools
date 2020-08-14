@@ -5,13 +5,15 @@ awscli
 azure-storage-blob
 azure-storage-file-datalake
 docker
+dock-r
 fire
 joblib
 junit-xml
+logless
 pandas
-psutil
 pyspark
 s3fs
+uio
 xmlrunner
 
 # DBT ETL Tool:

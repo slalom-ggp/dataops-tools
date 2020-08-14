@@ -62,16 +62,16 @@ RUN dbt-spark init sample-dbtspark-project && \
     cd sample-dbtspark-project && \
     dbt-spark --version
 
-# Install pipelinewise
-ENV PIPELINEWISE_HOME /venv/pipelinewise
-ENV PIPELINEWISEENV /venv/pipelinewise/.virtualenvs/pipelinewise
-RUN cd /venv && \
-    git clone https://github.com/transferwise/pipelinewise.git && \
-    cd pipelinewise && ./install.sh --acceptlicenses && \
-    ln -s $PIPELINEWISEENV/bin/pipelinewise /usr/bin/pipelinewise && \
-    pipelinewise --version
-RUN pipelinewise init --dir sample_pipelinewise_project --name sample_pipelinewise_project && \
-    pipelinewise import --dir sample_pipelinewise_project
+# # Install pipelinewise
+# ENV PIPELINEWISE_HOME /venv/pipelinewise
+# ENV PIPELINEWISEENV /venv/pipelinewise/.virtualenvs/pipelinewise
+# RUN cd /venv && \
+#     git clone https://github.com/transferwise/pipelinewise.git && \
+#     cd pipelinewise && ./install.sh --acceptlicenses && \
+#     ln -s $PIPELINEWISEENV/bin/pipelinewise /usr/bin/pipelinewise && \
+#     pipelinewise --version
+# RUN pipelinewise init --dir sample_pipelinewise_project --name sample_pipelinewise_project && \
+#     pipelinewise import --dir sample_pipelinewise_project
 
 # Install tap-salesforce
 RUN python3 -m venv /venv/tap-salesforce && \

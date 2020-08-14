@@ -16,14 +16,11 @@ pip install slalom.dataops
 
 After installing via pip, you will have access to the following command line tools:
 
-| Command    | Description                                                                                                              |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `s-anon`   | Run anonymization functions against a data file.                                                                         |
-| `s-docker` | Run Docker and ECS commands.                                                                                             |
-| `s-infra`  | Run Terraform IAC (Infrastructure-as-Code) automation.                                                                   |
-| `s-io`     | Read and write files from a variety of cloud platforms (full support for S3, Azure, and Git as if they were local paths. |
-| `s-spark`  | Run Spark programs and Jupyter notebooks (natively, containerized via docker, or remotely via ECS).                      |
-| `s-tap`    | Deprecated. Please see the spinoff [tapdance](https://github.com/aaronsteers/tapdance) library mentioned below.          |
+| Command   | Description                                                                                         |
+| --------- | --------------------------------------------------------------------------------------------------- |
+| `s-anon`  | Run anonymization functions against a data file.                                                    |
+| `s-spark` | Run Spark programs and Jupyter notebooks (natively, containerized via docker, or remotely via ECS). |
+| `s-infra` | Run Terraform IAC (Infrastructure-as-Code) automation.                                              |
 
 ## Spin off Projects
 
@@ -105,5 +102,5 @@ s-anon anonymize path/to/file.xlsx MySuperSecretAnonymizationSeed SHA256
 ```
 
 ```python
-from slalom.dataops import dockerutils, sparkutils; dockerutils.smart_build("containers/docker-spark/Dockerfile", "local-spark", push_core=False); dockerutils.smart_build("Dockerfile", "local-dataops", push_core=False); spark = sparkutils.get_spark(dockerized=True)
+import dock_r, sparkutils; dock_r.smart_build("containers/docker-spark/Dockerfile", "local-spark", push_core=False); dock_r.smart_build("Dockerfile", "local-dataops", push_core=False); spark = sparkutils.get_spark(dockerized=True)
 ```

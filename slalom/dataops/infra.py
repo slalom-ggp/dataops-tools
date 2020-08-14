@@ -4,16 +4,17 @@ import os
 import sys
 from pathlib import Path
 from typing import Dict, List
+
 import fire
+from logless import get_logger, logged, logged_block
+import runnow
 from tqdm import tqdm
+import uio
 
 code_file = os.path.realpath(__file__)
 repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(code_file)))
 sys.path.append(os.path.join(repo_dir, "src"))
 sys.path.append(os.path.dirname(code_file))
-
-from slalom.dataops.logs import get_logger, logged, logged_block
-from slalom.dataops import jobs, io
 
 DEBUG = False
 logging = get_logger("slalom.dataops.infra", debug=DEBUG)
@@ -42,17 +43,17 @@ def _proper(str: str, title_case=True, special_case_words=None):
 
 
 def _update_var_output(output_var):
-    return_code, output = jobs.run_command(f"terraform output {output_var}", echo=False)
-    io.create_text_file(os.path.join("outputs", output_var), contents=output)
+    return_code, output = runnow.run(f"terraform output {output_var}", echo=False)
+    uio.create_text_file(os.path.join("outputs", output_var), contents=output)
     return True
 
 
 @logged("updating output files")
 def update_var_outputs(infra_dir, output_vars=[]):
     outputs_dir = os.path.join(infra_dir, "outputs")
-    io.create_folder(outputs_dir)
-    for oldfile in io.list_files(outputs_dir):
-        io.delete_file(oldfile)
+    uio.create_folder(outputs_dir)
+    for oldfile in uio.list_files(outputs_dir):
+        uio.delete_file(oldfile)
     results = Parallel(n_jobs=40, verbose=2)(
         delayed(_update_var_output)(outvar)
         for outvar in tqdm(output_vars, "Saving output to infra/outputs")
@@ -74,7 +75,7 @@ def install(*args, infra_dir="./infra", deploy=False, git_ref="master"):
     s-infra init+apply --infra_dir=infra
     ```
     """
-    io.create_folder(infra_dir)
+    uio.create_folder(infra_dir)
     for arg in args:
         with logged_block(f"installing terraform modules from '{arg}'"):
             infra_type, infra_name = arg.split(":")
@@ -82,12 +83,12 @@ def install(*args, infra_dir="./infra", deploy=False, git_ref="master"):
                 raise ValueError(
                     f"Expected infra_type to be one of: 'catalog', 'samples'. Received type: {infra_type}"
                 )
-            io.download_folder(
+            uio.download_folder(
                 remote_folder=f"git://github.com/slalom-ggp/dataops-infra#{git_ref}//{infra_type}/{infra_name}",
                 local_folder=infra_dir,
             )
     lf = "\n"
-    logging.info(f"List of installed modules:\n{lf.join(io.ls(infra_dir))}")
+    logging.info(f"List of installed modules:\n{lf.join(uio.ls(infra_dir))}")
     init(infra_dir=infra_dir)
     if deploy:
         apply(infra_dir=infra_dir)
@@ -96,13 +97,13 @@ def install(*args, infra_dir="./infra", deploy=False, git_ref="master"):
 @logged("initializing terraform project at '{infra_dir}'")
 def init(infra_dir: str = "./infra/"):
     infra_dir = os.path.realpath(infra_dir)
-    jobs.run_command("terraform init", working_dir=infra_dir)
+    runnow.run("terraform init", working_dir=infra_dir)
 
 
 @logged("applying terraform changes")
 def apply(infra_dir: str = "./infra/", save_output: bool = False, prompt: bool = False):
     infra_dir = os.path.realpath(infra_dir)
-    jobs.run_command(
+    runnow.run(
         f"terraform apply {'' if prompt else '-auto-approve'}", working_dir=infra_dir
     )
     if save_output:
@@ -187,10 +188,10 @@ def update_module_docs(
     """
     markdown_text = ""
     if ".git" not in tf_dir and ".terraform" not in tf_dir:
-        tf_files = [x for x in io.list_files(tf_dir) if x.endswith(".tf")]
+        tf_files = [x for x in uio.list_files(tf_dir) if x.endswith(".tf")]
         extra_docs = [
             x
-            for x in io.list_files(tf_dir)
+            for x in uio.list_files(tf_dir)
             if extra_docs_names and os.path.basename(x) in extra_docs_names
         ]
         if tf_files:
@@ -204,7 +205,7 @@ def update_module_docs(
                     special_case_words=special_case_words,
                 )
             module_path = tf_dir.replace(".", "").replace("//", "/").replace("\\", "/")
-            _, markdown_output = jobs.run_command(
+            _, markdown_output = runnow.run(
                 f"terraform-docs md --no-providers --sort-by-required {tf_dir}",
                 echo=False,
             )
@@ -214,19 +215,23 @@ def update_module_docs(
                 )
             markdown_text += markdown_output
             for extra_file in extra_docs:
-                markdown_text += io.get_text_file_contents(extra_file) + "\n"
+                markdown_text += uio.get_text_file_contents(extra_file) + "\n"
             if footer:
                 markdown_text += DOCS_FOOTER.format(
                     src="\n".join(
                         [
-                            "* [{f}]({f})".format(f=os.path.basename(tf_file))
+                            "* [{file}]({repo}/tree/master/{dir}/{file})".format(
+                                repo=git_repo,
+                                dir=module_path,
+                                file=os.path.basename(tf_file),
+                            )
                             for tf_file in tf_files
                         ]
                     )
                 )
-            io.create_text_file(f"{tf_dir}/{readme}", markdown_text)
+            uio.create_text_file(f"{tf_dir}/{readme}", markdown_text)
     if recursive:
-        for folder in io.list_files(tf_dir):
+        for folder in uio.list_files(tf_dir):
             if os.path.isdir(folder):
                 update_module_docs(folder, recursive=recursive, readme=readme)
 
@@ -256,11 +261,11 @@ def get_tf_metadata(
         and "samples" not in tf_dir
         and "tests" not in tf_dir
     ):
-        if [x for x in io.list_files(tf_dir) if x.endswith(".tf")]:
-            _, json_text = jobs.run_command(f"terraform-docs json {tf_dir}", echo=False)
+        if [x for x in uio.list_files(tf_dir) if x.endswith(".tf")]:
+            _, json_text = runnow.run(f"terraform-docs json {tf_dir}", echo=False)
             result[tf_dir] = json.loads(json_text)
     if recursive:
-        for folder in io.list_files(tf_dir):
+        for folder in uio.list_files(tf_dir):
             folder = folder.replace("\\", "/")
             if os.path.isdir(folder):
                 result.update(get_tf_metadata(folder, recursive=recursive))
@@ -367,11 +372,11 @@ def change_upstream_source(
     """Change Terraform source"""
     if to_relative and to_git or not (to_relative or to_git):
         raise ValueError("Must specify `--to_git` or `--to_relative`, but not both.")
-    for tf_file in io.list_files(dir_to_update):
+    for tf_file in uio.list_files(dir_to_update):
         if tf_file.endswith(".tf"):
             # print(tf_file)
             new_lines = []
-            for line in io.get_text_file_contents(tf_file).splitlines():
+            for line in uio.get_text_file_contents(tf_file).splitlines():
                 new_line = line
                 if line.lstrip().startswith("source "):
                     current_path = line.lstrip().split('"')[1]
@@ -401,9 +406,9 @@ def change_upstream_source(
                 print(f"\n\n------------\n-- {tf_file}\n------------")
                 print(new_file_text)
             else:
-                io.create_text_file(tf_file, new_file_text)
+                uio.create_text_file(tf_file, new_file_text)
     if not dry_run:
-        jobs.run_command("terraform fmt -recursive", dir_to_update)
+        runnow.run("terraform fmt -recursive", dir_to_update)
 
 
 def main():

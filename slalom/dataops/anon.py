@@ -38,7 +38,7 @@ def anonymize_file(filepath: str, hash_key: str = None, hash_function: str = "MD
     hash_key : str
         A hash key to be used as a seed during anonymization.
     hash_function : str, optional
-        The hashing function to use, by default "MD5"
+        The hashing function to use, by default "MD5" (most ubiquitous) will be used
 
     Raises
     ------
@@ -57,7 +57,7 @@ def anonymize_file(filepath: str, hash_key: str = None, hash_function: str = "MD
 
     def hash_fn(x):
         fn = HASH_FUNCTIONS[hash_function]
-        return fn(f"{x}{hash_key}".encode("utf-8")).hexdigest()
+        return fn(f"{hash_key}{x}".encode("utf-8")).hexdigest()
 
     df = pandas.read_excel(filepath)
     df[df.columns[0]] = df[df.columns[0]].apply(hash_fn)
@@ -66,8 +66,12 @@ def anonymize_file(filepath: str, hash_key: str = None, hash_function: str = "MD
         ".".join(filepath.split(".")[:-1]) + "-anonymized." + filepath.split(".")[-1]
     )
     print(new_filepath)
-    df.to_excel(new_filepath)
+    df.to_excel(new_filepath, index=False)
+
+
+def main():
+    fire.Fire({"anonymize": anonymize_file})
 
 
 if __name__ == "__main__":
-    fire.Fire({"anonymize": anonymize_file})
+    main()

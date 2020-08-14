@@ -21,14 +21,6 @@ jobs:
     steps:
       - name: Clone git repo
         uses: actions/checkout@v1
-      - name: Smart build and push (slalomggp/ci-builder)
-        uses: ./.github/actions/docker-smart-build
-        with:
-          dockerfilePath: containers/ci-builder/Dockerfile
-          tagAs: slalomggp/ci-builder:latest-dev,slalomggp/ci-builder:commit-${{ github.sha }}
-          dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPassword: ${{ secrets.DOCKER_SECRET }}
-          ignoreCaches: 0
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v1
         with:
@@ -48,8 +40,6 @@ jobs:
       - name: Test CLI shortcuts
         run: |
           set -v
-          s-docker --help
-          s-io --help
           s-spark --help
           s-infra --help
       - name: Lint with flake8
@@ -73,18 +63,11 @@ jobs:
         uses: actions/setup-python@v1
         with:
           python-version: 3.7
-      - name: Generate build number (BUILD_NUMBER)
-        id: buildnumber
-        uses: einaregilsson/build-number@v2
-        with:
-          token: ${{secrets.github_token}}
       - name: Push to PyPi (https://pypi.org/project/slalom.dataops/)
         env:
-          # VERSION: ${{ github.ref }}
           BRANCH_NAME: ${{ github.ref }}
           PYPI_USER: ${{ secrets.PYPI_USER }}
           PYPI_PASS: ${{ secrets.PYPI_SECRET }}
-          BUILD_NUMBER: ${{ steps.buildnumber.outputs.build_number }}
         run: |
           echo -e "Installing twine...\n\n"
           pip install twine
@@ -92,35 +75,15 @@ jobs:
           python setup.py sdist
           echo -e "\nPublishing to version ref '$VERSION'...\n\n"
           twine upload -u $PYPI_USER -p $PYPI_PASS dist/*
-      - name: Test install (pip install slalom.dataops)
-        run: |
-          pip install slalom.dataops
-      - name: Test uninstall (pip uninstall slalom.dataops)
-        run: |
-          pip uninstall -y slalom.dataops
-      - name: Test full install (pip install w/ extras)
-        run: |
-          pip install slalom.dataops[Azure,AWS,Docker,Pandas,Spark]
-
-  singer_docker_builds:
-    runs-on: ubuntu-latest
-    needs:
-      - pypi_publish
-    steps:
-      - name: Clone git repo
-        uses: actions/checkout@v1
-      - name: Set up Python 3.7
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: Install slalom.dataops
-        run: python3 setup.py install
-      - name: Login to docker
-        run: docker login -u ${{ secrets.DOCKER_USER }} -p ${{ secrets.DOCKER_SECRET }}
-      - name: Build and push all pre-release singer images
-        run: cd containers/singer && s-tap build_all_images --pre --push
-      - name: Print list of images
-        run: docker image ls
+      # - name: Test install (pip install slalom.dataops --pre)
+      #   run: |
+      #     pip install --no-cache-dir slalom.dataops==$(cat VERSION) --pre
+      # - name: Test uninstall (pip uninstall slalom.dataops)
+      #   run: |
+      #     pip uninstall -y slalom.dataops
+      # - name: Test full install (pip install --pre w/ extras)
+      #   run: |
+      #     pip install slalom.dataops[AWS,Azure,Pandas,Spark]==$(cat VERSION) --pre
 
   docker_spark:
     runs-on: ubuntu-latest
@@ -131,75 +94,72 @@ jobs:
       - name: Clone git repo
         uses: actions/checkout@v1
       - name: Smart build and push (${{ env.IMAGE_NAME }})
-        uses: ./.github/actions/docker-smart-build
+        uses: aaronsteers/dock-r/.github/actions/docker-smart-build@master
         with:
           dockerfilePath: ${{ env.DOCKERFILE_PATH }}
           tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
           dockerUser: ${{ secrets.DOCKER_USER }}
           dockerPassword: ${{ secrets.DOCKER_SECRET }}
           ignoreCaches: 0
-
-  docker_dbt_min:
-    runs-on: ubuntu-latest
-    env:
-      IMAGE_NAME: slalomggp/dbt
-      DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
-      TAG_PREFIX: min-
-    steps:
-      - name: Clone git repo
-        uses: actions/checkout@v1
-      - name: Smart build and push (slalom/dbt)
-        uses: ./.github/actions/docker-smart-build
-        with:
-          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
-          tagAs: ${{ env.IMAGE_NAME }}:${{ env.TAG_PREFIX }}latest-dev,${{ env.IMAGE_NAME }}:${{ env.TAG_PREFIX }}commit-${{ github.sha }}
-          dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPassword: ${{ secrets.DOCKER_SECRET }}
-          additionalArgs: >
-            --build-arg source_image=python:3.7
-            --build-arg dbt_spark_source=git+https://github.com/fishtown-analytics/dbt-spark@master
-          ignoreCaches: 0
-
-  docker_dbt:
-    runs-on: ubuntu-latest
-    needs:
-      - docker_spark
-    env:
-      IMAGE_NAME: slalomggp/dbt
-      DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
-    steps:
-      - name: Clone git repo
-        uses: actions/checkout@v1
-      - name: Smart build and push (slalom/dbt)
-        uses: ./.github/actions/docker-smart-build
-        with:
-          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
-          tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
-          dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPassword: ${{ secrets.DOCKER_SECRET }}
-          additionalArgs: >
-            --build-arg source_image=slalomggp/spark:commit-${{ github.sha }}
-            --build-arg dbt_spark_source=git+https://github.com/fishtown-analytics/dbt-spark@master
-          ignoreCaches: 0
-
-  docker_dataops:
-    runs-on: ubuntu-latest
-    needs:
-      - python_dataops_build
-      - docker_spark
-      - docker_dbt
-    env:
-      IMAGE_NAME: slalomggp/dataops
-      DOCKERFILE_PATH: ./Dockerfile
-    steps:
-      - name: Clone git repo
-        uses: actions/checkout@v1
-      - name: Smart build and push (${{ env.IMAGE_NAME }})
-        uses: ./.github/actions/docker-smart-build
-        with:
-          dockerfilePath: ${{ env.DOCKERFILE_PATH }}
-          tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
-          dockerUser: ${{ secrets.DOCKER_USER }}
-          dockerPassword: ${{ secrets.DOCKER_SECRET }}
-          additionalArgs: --build-arg source_image=slalomggp/dbt:commit-${{ github.sha }}
-          ignoreCaches: 0
+  # docker_dbt_min:
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     IMAGE_NAME: slalomggp/dbt
+  #     DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
+  #     TAG_PREFIX: min-
+  #   steps:
+  #     - name: Clone git repo
+  #       uses: actions/checkout@v1
+  #     - name: Smart build and push (slalom/dbt)
+  #       uses: aaronsteers/dock-r/.github/actions/docker-smart-build@master
+  #       with:
+  #         dockerfilePath: ${{ env.DOCKERFILE_PATH }}
+  #         tagAs: ${{ env.IMAGE_NAME }}:${{ env.TAG_PREFIX }}latest-dev,${{ env.IMAGE_NAME }}:${{ env.TAG_PREFIX }}commit-${{ github.sha }}
+  #         dockerUser: ${{ secrets.DOCKER_USER }}
+  #         dockerPassword: ${{ secrets.DOCKER_SECRET }}
+  #         additionalArgs: >
+  #           --build-arg source_image=python:3.7
+  #           --build-arg dbt_spark_source=git+https://github.com/fishtown-analytics/dbt-spark@master
+  #         ignoreCaches: 0
+  # docker_dbt:
+  #   runs-on: ubuntu-latest
+  #   needs:
+  #     - docker_spark
+  #   env:
+  #     IMAGE_NAME: slalomggp/dbt
+  #     DOCKERFILE_PATH: containers/docker-dataops/dbt.Dockerfile
+  #   steps:
+  #     - name: Clone git repo
+  #       uses: actions/checkout@v1
+  #     - name: Smart build and push (slalom/dbt)
+  #       uses: aaronsteers/dock-r/.github/actions/docker-smart-build@master
+  #       with:
+  #         dockerfilePath: ${{ env.DOCKERFILE_PATH }}
+  #         tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
+  #         dockerUser: ${{ secrets.DOCKER_USER }}
+  #         dockerPassword: ${{ secrets.DOCKER_SECRET }}
+  #         additionalArgs: >
+  #           --build-arg source_image=slalomggp/spark:commit-${{ github.sha }}
+  #           --build-arg dbt_spark_source=git+https://github.com/fishtown-analytics/dbt-spark@master
+  #         ignoreCaches: 0
+  # docker_dataops:
+  #   runs-on: ubuntu-latest
+  #   needs:
+  #     - python_dataops_build
+  #     - docker_spark
+  #     - docker_dbt
+  #   env:
+  #     IMAGE_NAME: slalomggp/dataops
+  #     DOCKERFILE_PATH: ./Dockerfile
+  #   steps:
+  #     - name: Clone git repo
+  #       uses: actions/checkout@v1
+  #     - name: Smart build and push (${{ env.IMAGE_NAME }})
+  #       uses: aaronsteers/dock-r/.github/actions/docker-smart-build@master
+  #       with:
+  #         dockerfilePath: ${{ env.DOCKERFILE_PATH }}
+  #         tagAs: ${{ env.IMAGE_NAME }}:latest-dev,${{ env.IMAGE_NAME }}:commit-${{ github.sha }}
+  #         dockerUser: ${{ secrets.DOCKER_USER }}
+  #         dockerPassword: ${{ secrets.DOCKER_SECRET }}
+  #         additionalArgs: --build-arg source_image=slalomggp/dbt:commit-${{ github.sha }}
+  #         ignoreCaches: 0

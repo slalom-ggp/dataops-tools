@@ -4,9 +4,9 @@ import platform
 import sys
 
 import fire
-
-from slalom.dataops.logs import get_logger, logged, logged_block
-from slalom.dataops import jobs, io
+from logless import get_logger, logged, logged_block
+import runnow
+import uio
 
 if os.name == "nt":
     import ctypes
@@ -35,18 +35,6 @@ LINUX_INSTALL_LIST = {"docker": "docker.io", "docker-compose": "docker-compose"}
 MAC_INSTALL_LIST = {"docker": "brew cask install docker && open /Applications/Docker.app"}
 
 
-def is_windows() -> bool:
-    return platform.system() == "Windows"
-
-
-def is_mac() -> bool:
-    return platform.system() == "Darwin"
-
-
-def is_linux() -> bool:
-    return platform.system() == "Linux"
-
-
 def status():
     check_installs(install_if_missing=False)
 
@@ -61,9 +49,9 @@ def _to_list(str_or_list):
 
 
 def is_admin():
-    if is_linux() or is_mac():
+    if uio.is_linux() or uio.is_mac():
         return os.geteuid() == 0
-    elif is_windows():
+    elif uio.is_windows():
         try:
             return ctypes.windll.shell32.IsUserAnAdmin()
         except:
@@ -129,11 +117,11 @@ def run_as_admin(cmd: list = None, wait=True):
 
 
 def check_installs(install_list=None, install_if_missing: bool = None):
-    if is_windows():
+    if uio.is_windows():
         ref_list = WINDOWS_INSTALL_LIST
-    elif is_linux():
+    elif uio.is_linux():
         ref_list = LINUX_INSTALL_LIST
-    elif is_mac():
+    elif uio.is_mac():
         ref_list = MAC_INSTALL_LIST
     else:
         raise RuntimeError("Could not detect OS type.")
@@ -164,7 +152,7 @@ def check_install(
     installed = program_name.lower() in installed_programs.keys()
     if not installed:
         for test_cmd in [f"{program_name} --version", f"which {program_name}"]:
-            return_code, output = jobs.run_command(test_cmd, raise_error=False)
+            return_code, output = runnow.run(test_cmd, raise_error=False)
             if return_code == 0 and len(output) > 1:
                 installed = True
                 break
@@ -175,11 +163,11 @@ def check_install(
 
 
 def _default_install_cmd(program_name):
-    if is_windows():
+    if uio.is_windows():
         return f"choco install -y {program_name}"
-    elif is_linux():
+    elif uio.is_linux():
         return f"apt-get install -y {program_name}"
-    elif is_mac():
+    elif uio.is_mac():
         return f"choco install {program_name}"
     else:
         raise RuntimeError("Could not detect OS type.")
@@ -190,8 +178,8 @@ def get_installed_programs():
 
     if CACHED_INSTALL_LIST:
         return CACHED_INSTALL_LIST
-    if is_windows():
-        return_code, output = jobs.run_command("choco list --local", raise_error=False)
+    if uio.is_windows():
+        return_code, output = runnow.run("choco list --local", raise_error=False)
         if return_code == 0:
             CACHED_INSTALL_LIST = {
                 x.split(" ")[0].lower(): x.split(" ")[1]
@@ -200,9 +188,9 @@ def get_installed_programs():
             }
         else:
             CACHED_INSTALL_LIST = {}
-    elif is_linux():
+    elif uio.is_linux():
         CACHED_INSTALL_LIST = {}
-    elif is_mac():
+    elif uio.is_mac():
         CACHED_INSTALL_LIST = {}
     return CACHED_INSTALL_LIST
 
@@ -216,7 +204,7 @@ def install(program_name, install_cmd):
     if not is_admin():
         return_code = run_as_admin(cmd=install_cmd.split(" "), prompt=True)
     else:
-        return_code, output = jobs.run_command(install_cmd)
+        return_code, output = runnow.run(install_cmd)
     return return_code == 0
 
 

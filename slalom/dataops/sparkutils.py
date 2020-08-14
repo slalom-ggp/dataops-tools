@@ -29,16 +29,15 @@ from pyspark.sql.functions import (
     lit,
 )
 
-from slalom.dataops import io
-from slalom.dataops import dockerutils
-from slalom.dataops import jobs
-from slalom.dataops.logs import (
+import dock_r
+from logless import (
     get_logger,
     logged,
     logged_block,
-    _get_printable_context,
-    bytes_to_string,
 )
+import runnow
+import uio
+
 from slalom.dataops import pandasutils
 
 logging = get_logger("slalom.dataops.sparkutils")
@@ -91,7 +90,7 @@ def _add_derby_metastore_config(hadoop_conf):
     derby_home = "/home/data/derby_home"
     derby_hive_metastore_dir = "/home/data/hive_metastore_db"
     for folder in [SPARK_WAREHOUSE_DIR, derby_hive_metastore_dir]:
-        io.create_folder(derby_home)
+        uio.create_folder(derby_home)
     derby_options = (
         f"-Dderby.stream.error.file={derby_log} -Dderby.system.home={derby_home}"
     )
@@ -149,8 +148,8 @@ def _add_aws_creds_config(hadoop_conf):
         + " -Djava.net.preferIPv4Stack=true -Dcom.amazonaws.services.s3.enableV4=true"
     )
     try:
-        key, secret, token = io.parse_aws_creds()
-        io.set_aws_env_vars(key, secret, token)
+        key, secret, token = uio.parse_aws_creds()
+        uio.set_aws_env_vars(key, secret, token)
         logging.info(
             f"Successfully loaded AWS creds for access key: ****************{key[-4:]}"
         )
@@ -216,7 +215,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
         "10000": "10000",  # Thrift JDBC port for SQL queries
         "18080": "18080",  # History Server Web UI
     }
-    io.set_aws_env_vars()
+    uio.set_aws_env_vars()
     env = [
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -231,7 +230,7 @@ def _init_spark_container(spark_image=DOCKER_SPARK_IMAGE, with_jupyter=False):
     docker_client = docker.from_env()  # WSL1
     # docker_client = docker.DockerClient(base_url="npipe:////./pipe/docker_wsl")  # WSL2
     try:
-        dockerutils.pull(spark_image)
+        dock_r.pull(spark_image)
     except Exception as ex:
         logging.warning(f"Could not pull latest Spark image '{spark_image}'. {ex}")
     try:
@@ -312,7 +311,7 @@ def _init_spark(dockerized=False, with_jupyter=False, daemon=False):
         wait_max = 120  # Max wait in seconds
         if with_jupyter:
             cmd = f"{cmd} --with_jupyter"
-        jobs.run_command(cmd, daemon=True, wait_test=wait_test, wait_max=wait_max)
+        runnow.run(cmd, daemon=True, wait_test=wait_test, wait_max=wait_max)
     else:
         _init_local_spark()
 
@@ -323,7 +322,7 @@ def _init_local_spark():
 
     # context = SparkContext(conf=conf)
     for folder in [SPARK_WAREHOUSE_DIR]:
-        io.create_folder(folder)
+        uio.create_folder(folder)
     conf = SparkConf()
     hadoop_conf = _get_hadoop_conf()
     for fn in [conf.set]:
@@ -394,7 +393,7 @@ def add_udf_module(module_dir=None):
     #     sys.path.append(module_root)
     if not os.path.isdir(module_dir):
         raise ValueError(f"Folder '{module_dir}' does not exist.")
-    for file in io.list_files(module_dir):
+    for file in uio.list_files(module_dir):
         if file.endswith(".py"):
             module = path_import(file)
             for member in getmembers(module):
@@ -418,9 +417,9 @@ def start_jupyter(nb_directory="/home/jovyan/work", nb_token="qwerty123"):
         f" --allow-root"
     )
     log_file = "jupyter_log.txt"
-    jobs.run_command(jupyter_run_command, daemon=True, log_file_path=log_file)
+    runnow.run(jupyter_run_command, daemon=True, log_file_path=log_file)
     time.sleep(5)
-    logging.info("\nJUPYTER_LOG:".join(io.get_text_file_contents(log_file).splitlines()))
+    logging.info("\nJUPYTER_LOG:".join(uio.get_text_file_contents(log_file).splitlines()))
     logging.info(
         "Jupyter notebooks server started at: https://localhost:8888/?token=qwerty123"
     )
@@ -432,6 +431,29 @@ def get_spark(dockerized=False):
     if not spark:
         _init_spark(dockerized=dockerized)
     return spark
+
+
+def _get_printable_context(context: dict = None, as_str=True):
+    """Return a string or dict, obfuscating names that look like keys."""
+    printable_dict = {
+        k: (
+            v
+            if not any(
+                [
+                    "secret" in k.lower(),
+                    "pwd" in k.lower(),
+                    "pass" in k.lower(),
+                    "access.key" in k.lower(),
+                ]
+            )
+            else "****"
+        )
+        for k, v in context.items()
+        if k != "__builtins__"
+    }
+    if as_str:
+        return "\n".join([f"\t{k}:\t{v}" for k, v in printable_dict.items()])
+    return printable_dict
 
 
 def _print_conf_debug(sc):
@@ -624,13 +646,13 @@ def save_spark_table(
     start_time = time.time()
     file_path = _verify_path(file_path)
     df = spark.sql(f"SELECT * FROM {table_name}")
-    if io.file_exists(os.path.join(file_path, "_SUCCESS")):
+    if uio.file_exists(os.path.join(file_path, "_SUCCESS")):
         if overwrite:
             logging.warning(
                 "Saved table already exists and overwrite=True. Deleting older files."
             )
-            for oldfile in io.list_files(file_path):
-                io.delete_file(oldfile)
+            for oldfile in uio.list_files(file_path):
+                uio.delete_file(oldfile)
     if force_single_file:
         logging.debug(
             f"Saving spark table '{table_name}' to single file: '{file_path}'..."
