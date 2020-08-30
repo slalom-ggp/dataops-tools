@@ -52,7 +52,7 @@ def _update_var_output(output_var):
 def update_var_outputs(infra_dir, output_vars=[]):
     outputs_dir = os.path.join(infra_dir, "outputs")
     uio.create_folder(outputs_dir)
-    for oldfile in uio.list_files(outputs_dir):
+    for oldfile in uio.list_local_files(outputs_dir, recursive=False):
         uio.delete_file(oldfile)
     results = Parallel(n_jobs=40, verbose=2)(
         delayed(_update_var_output)(outvar)
@@ -188,10 +188,12 @@ def update_module_docs(
     """
     markdown_text = ""
     if ".git" not in tf_dir and ".terraform" not in tf_dir:
-        tf_files = [x for x in uio.list_files(tf_dir) if x.endswith(".tf")]
+        tf_files = [
+            x for x in uio.list_local_files(tf_dir, recursive=False) if x.endswith(".tf")
+        ]
         extra_docs = [
             x
-            for x in uio.list_files(tf_dir)
+            for x in uio.list_local_files(tf_dir, recursive=False)
             if extra_docs_names and os.path.basename(x) in extra_docs_names
         ]
         if tf_files:
@@ -231,7 +233,7 @@ def update_module_docs(
                 )
             uio.create_text_file(f"{tf_dir}/{readme}", markdown_text)
     if recursive:
-        for folder in uio.list_files(tf_dir):
+        for folder in uio.list_local_files(tf_dir, recursive=False):
             if os.path.isdir(folder):
                 update_module_docs(folder, recursive=recursive, readme=readme)
 
@@ -261,11 +263,13 @@ def get_tf_metadata(
         and "samples" not in tf_dir
         and "tests" not in tf_dir
     ):
-        if [x for x in uio.list_files(tf_dir) if x.endswith(".tf")]:
+        if [
+            x for x in uio.list_local_files(tf_dir, recursive=False) if x.endswith(".tf")
+        ]:
             _, json_text = runnow.run(f"terraform-docs json {tf_dir}", echo=False)
             result[tf_dir] = json.loads(json_text)
     if recursive:
-        for folder in uio.list_files(tf_dir):
+        for folder in uio.list_local_files(tf_dir, recursive=False):
             folder = folder.replace("\\", "/")
             if os.path.isdir(folder):
                 result.update(get_tf_metadata(folder, recursive=recursive))
@@ -372,7 +376,7 @@ def change_upstream_source(
     """Change Terraform source"""
     if to_relative and to_git or not (to_relative or to_git):
         raise ValueError("Must specify `--to_git` or `--to_relative`, but not both.")
-    for tf_file in uio.list_files(dir_to_update):
+    for tf_file in uio.list_local_files(dir_to_update, recursive=False):
         if tf_file.endswith(".tf"):
             # print(tf_file)
             new_lines = []
